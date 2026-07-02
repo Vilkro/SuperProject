@@ -23,193 +23,201 @@ BOOL _bTempIgnoreTimestamps = FALSE;
 #if _PATCHCONFIG_FIX_STRINGS && _PATCHCONFIG_ENGINEPATCHES
 
 // Original function pointer
-void (*pPutString)(const char *) = NULL;
+void (*pPutString)(const char*) = NULL;
 
 // Patched function
-void P_CPrintF(const char *strFormat, ...) {
-  if (_pConsole == NULL) return;
+void P_CPrintF(const char* strFormat, ...) {
+    if (_pConsole == NULL) return;
 
-  va_list arg;
-  va_start(arg, strFormat);
-  CTString strBuffer;
-  strBuffer.VPrintF(strFormat, arg);
-  va_end(arg);
+    va_list arg;
+    va_start(arg, strFormat);
+    CTString strBuffer;
+    strBuffer.VPrintF(strFormat, arg);
+    va_end(arg);
 
-  // Pass the formatted string into the regular printing function
-  P_CPutString(strBuffer);
+    // Pass the formatted string into the regular printing function
+    P_CPutString(strBuffer);
 };
 
 // Undecorate a string except for color tags, which are converted to extended colors for Windows terminal
-inline void ConvertColorsForTerminal(CTString &str) {
-  // Simple undecorated text
-  if (_EnginePatches._iColoredTextInServerLog == 1) {
-    str = str.Undecorated();
-    return;
-  }
-
-  CTString strResult = "";
-  const char *pch = str.str_String;
-
-  // Temporary variables for setting colors
-  char strTemp[7];
-  char *pchDummy;
-  COLOR col;
-  UBYTE ubR, ubG, ubB;
-
-  while (*pch != '\0') {
-    // Print regular characters as is
-    if (*pch != '^') {
-      strResult += CTString(0, "%c", *pch);
-      pch++;
-      continue;
+inline void ConvertColorsForTerminal(CTString& str) {
+    // Simple undecorated text
+    if (_EnginePatches._iColoredTextInServerLog == 1) {
+        str = str.Undecorated();
+        return;
     }
 
-    switch (pch[1]) {
-      // Set color
-      case 'c': {
-        const INDEX ctColor = FindZero((UBYTE *)pch + 2, 6);
+    CTString strResult = "";
+    const char* pch = str.str_String;
 
-        // If it's a full color code
-        if (ctColor == 6) {
-          // Convert code string to color
-          strncpy(strTemp, pch + 2, 6);
-          col = strtoul(strTemp, &pchDummy, 16) << 8;
+    // Temporary variables for setting colors
+    char strTemp[7];
+    char* pchDummy;
+    COLOR col;
+    UBYTE ubR, ubG, ubB;
 
-          // Then set extended foreground color in the terminal
-          ColorToRGB(col, ubR, ubG, ubB);
-          strResult += CTString(0, "\033[38;2;%d;%d;%dm", ubR, ubG, ubB);
-
-          // Set background color based on the overall brightness of the color
-          if (_EnginePatches._iColoredTextInServerLog > 2) {
-            ULONG iGray = (ubR * 0.299 + ubG * 0.587 + ubB * 0.114);
-            strResult += (iGray < 0x18) ? "\033[107m" : "\033[40m"; // Bright white or non-bright black
-          }
+    while (*pch != '\0') {
+        // Print regular characters as is
+        if (*pch != '^') {
+            strResult += CTString(0, "%c", *pch);
+            pch++;
+            continue;
         }
 
-        pch += 2 + ctColor;
-      } break;
+        switch (pch[1]) {
+            // Set color
+        case 'c': {
+            const INDEX ctColor = FindZero((UBYTE*)pch + 2, 6);
 
-      // Reset color
-      case 'r': case 'C': {
-        strResult += "\033[0m";
-        pch += 2;
-      } break;
+            // If it's a full color code
+            if (ctColor == 6) {
+                // Convert code string to color
+                strncpy(strTemp, pch + 2, 6);
+                col = strtoul(strTemp, &pchDummy, 16) << 8;
 
-      // Skip codes
-      case 'a': pch += 2 + FindZero((UBYTE *)pch + 2, 2); break;
-      case 'f': pch += 2 + FindZero((UBYTE *)pch + 2, 1); break;
-      case 'b': case 'i': case 'o':
-      case 'A': case 'F': case 'B': case 'I': pch += 2; break;
+                // Then set extended foreground color in the terminal
+                ColorToRGB(col, ubR, ubG, ubB);
+                strResult += CTString(0, "\033[38;2;%d;%d;%dm", ubR, ubG, ubB);
 
-      // Print tag character as is
-      case '^':
-        strResult += "^";
-        pch += 2;
-        break;
+                // Set background color based on the overall brightness of the color
+                if (_EnginePatches._iColoredTextInServerLog > 2) {
+                    ULONG iGray = (ubR * 0.299 + ubG * 0.587 + ubB * 0.114);
+                    strResult += (iGray < 0x18) ? "\033[107m" : "\033[40m"; // Bright white or non-bright black
+                }
+            }
 
-      // Print unrecognized codes as is
-      default:
-        strResult += CTString(0, "%c", pch[1]);
-        pch += 2;
-        break;
+            pch += 2 + ctColor;
+        } break;
+
+                // Reset color
+        case 'r': case 'C': {
+            strResult += "\033[0m";
+            pch += 2;
+        } break;
+
+                // Skip codes
+        case 'a': pch += 2 + FindZero((UBYTE*)pch + 2, 2); break;
+        case 'f': pch += 2 + FindZero((UBYTE*)pch + 2, 1); break;
+        case 'b': case 'i': case 'o':
+        case 'A': case 'F': case 'B': case 'I': pch += 2; break;
+
+            // Print tag character as is
+        case '^':
+            strResult += "^";
+            pch += 2;
+            break;
+
+            // Print unrecognized codes as is
+        default:
+            strResult += CTString(0, "%c", pch[1]);
+            pch += 2;
+            break;
+        }
     }
-  }
 
-  str = strResult;
+    str = strResult;
 };
 
 // Special wrapper for the original function
-inline void PutStringWrapper(const CTString &str) {
-  const BOOL bServer = _bDedicatedServer;
+inline void PutStringWrapper(const CTString& str) {
+    const BOOL bServer = _bDedicatedServer;
 
-  // Set output encoding for dedicated servers according to the system locale to support localized strings
-  const UINT uLastEncoding = GetConsoleOutputCP();
-  if (bServer) SetConsoleOutputCP(GetACP());
+    // Set output encoding for dedicated servers to support localized strings.
+    //
+    // 1111: Previously used GetACP() (the system's locale-default codepage),
+    // which only produces correct Cyrillic if the server OS itself is running
+    // under a Russian locale -- not the case on most hosting setups. Our
+    // Russian chat strings (see PlayerDB language preference / SayToClientLang)
+    // are encoded as Windows-1251, so we set that explicitly regardless of the
+    // server machine's own locale.
+    const UINT uLastEncoding = GetConsoleOutputCP();
+    if (bServer) SetConsoleOutputCP(1251);   // 1111
 
-  // If running through a dedicated server and want colored text
-  if (bServer && _EnginePatches._iColoredTextInServerLog > 0) {
-    // Print to the console application our own way
-    CTString strTerminal = str;
-    ConvertColorsForTerminal(strTerminal);
-    printf("%s", strTerminal.str_String);
+    // If running through a dedicated server and want colored text
+    if (bServer && _EnginePatches._iColoredTextInServerLog > 0) {
+        // Print to the console application our own way
+        CTString strTerminal = str;
+        ConvertColorsForTerminal(strTerminal);
+        printf("%s", strTerminal.str_String);
 
-    // And then temporarily skip printing via printf() in the original function
-    _bDedicatedServer = FALSE;
-    (*pPutString)(str);
-    _bDedicatedServer = bServer;
+        // And then temporarily skip printing via printf() in the original function
+        _bDedicatedServer = FALSE;
+        (*pPutString)(str);
+        _bDedicatedServer = bServer;
 
-  } else {
-    (*pPutString)(str);
-  }
+    }
+    else {
+        (*pPutString)(str);
+    }
 
-  // Restore encoding
-  if (bServer) SetConsoleOutputCP(uLastEncoding);
+    // Restore encoding
+    if (bServer) SetConsoleOutputCP(uLastEncoding);
 };
 
 // Patched function
-void P_CPutString(const char *strString) {
-  // Don't need any timestamps
-  if (_bTempIgnoreTimestamps || !_EnginePatches._bLogTimestamps) {
-    // Proceed to the original function
-    PutStringWrapper(strString);
-    return;
-  }
-
-  if (_pConsole == NULL) return;
-
-  // Prepare the current timestamp
-  time_t iLongTime;
-  time(&iLongTime);
-  tm *tmNow = localtime(&iLongTime);
-
-  const CTString strTime(0, "[%02d:%02d:%02d] ", tmNow->tm_hour, tmNow->tm_min, tmNow->tm_sec);
-
-  // Separate the string by lines
-  CStringStack astr;
-  IData::GetStrings(astr, strString, '\n');
-
-  const INDEX ct = astr.Count();
-  if (ct == 0) return; // Nothing to print
-
-  CTString strResult = "";
-
-  // Add a timestamp in the beginning if the last print ended with a newline
-  if (_pConsole->con_strCurrent[-1] == '\n') {
-    strResult += strTime;
-  }
-
-  // Add the first line as is
-  strResult += astr[0];
-
-  // Add the rest of the lines with timestamps in the beginning
-  for (INDEX i = 1; i < ct; i++) {
-    // Ignore the timestamp if the last line is empty
-    if (i == ct - 1 && astr[i] == "") {
-      strResult += "\n";
-      break;
+void P_CPutString(const char* strString) {
+    // Don't need any timestamps
+    if (_bTempIgnoreTimestamps || !_EnginePatches._bLogTimestamps) {
+        // Proceed to the original function
+        PutStringWrapper(strString);
+        return;
     }
 
-    strResult += "\n" + strTime + astr[i];
-  }
+    if (_pConsole == NULL) return;
 
-  // Proceed to the original function
-  PutStringWrapper(strResult);
+    // Prepare the current timestamp
+    time_t iLongTime;
+    time(&iLongTime);
+    tm* tmNow = localtime(&iLongTime);
+
+    const CTString strTime(0, "[%02d:%02d:%02d] ", tmNow->tm_hour, tmNow->tm_min, tmNow->tm_sec);
+
+    // Separate the string by lines
+    CStringStack astr;
+    IData::GetStrings(astr, strString, '\n');
+
+    const INDEX ct = astr.Count();
+    if (ct == 0) return; // Nothing to print
+
+    CTString strResult = "";
+
+    // Add a timestamp in the beginning if the last print ended with a newline
+    if (_pConsole->con_strCurrent[-1] == '\n') {
+        strResult += strTime;
+    }
+
+    // Add the first line as is
+    strResult += astr[0];
+
+    // Add the rest of the lines with timestamps in the beginning
+    for (INDEX i = 1; i < ct; i++) {
+        // Ignore the timestamp if the last line is empty
+        if (i == ct - 1 && astr[i] == "") {
+            strResult += "\n";
+            break;
+        }
+
+        strResult += "\n" + strTime + astr[i];
+    }
+
+    // Proceed to the original function
+    PutStringWrapper(strResult);
 };
 
-INDEX CStringPatch::P_VPrintF(const char *strFormat, va_list arg)
+INDEX CStringPatch::P_VPrintF(const char* strFormat, va_list arg)
 {
-  // [Cecil] Resize 4 times more than vanilla
-  static const ULONG ulAddSize = 1024;
+    // [Cecil] Resize 4 times more than vanilla
+    static const ULONG ulAddSize = 1024;
 
-  // [Cecil] Local variables instead of static
-  INDEX ctBufferSize = ulAddSize;
-  char *pchBuffer = (char *)AllocMemory(ulAddSize);
+    // [Cecil] Local variables instead of static
+    INDEX ctBufferSize = ulAddSize;
+    char* pchBuffer = (char*)AllocMemory(ulAddSize);
 
-  INDEX iLen;
+    INDEX iLen;
 
-  FOREVER {
-    // Print to the buffer
-    iLen = _vsnprintf(pchBuffer, ctBufferSize, strFormat, arg);
+    FOREVER{
+        // Print to the buffer
+        iLen = _vsnprintf(pchBuffer, ctBufferSize, strFormat, arg);
 
     // Stop if printed okay
     if (iLen != -1) {
@@ -218,50 +226,50 @@ INDEX CStringPatch::P_VPrintF(const char *strFormat, va_list arg)
 
     // Increase the buffer size
     ctBufferSize += ulAddSize;
-    GrowMemory((void **)&pchBuffer, ctBufferSize);
-  }
+    GrowMemory((void**)&pchBuffer, ctBufferSize);
+    }
 
-  ((CTString &)*this) = pchBuffer;
+    ((CTString&)*this) = pchBuffer;
 
-  // [Cecil] Free local buffer memory
-  FreeMemory(pchBuffer);
+    // [Cecil] Free local buffer memory
+    FreeMemory(pchBuffer);
 
-  return iLen;
+    return iLen;
 };
 
 CTString CStringPatch::P_Undecorated(void) const {
-  CTString strResult = *this;
-  const char *pchSrc = str_String;
-  char *pchDst = strResult.str_String;
+    CTString strResult = *this;
+    const char* pchSrc = str_String;
+    char* pchDst = strResult.str_String;
 
-  while (pchSrc[0] != 0)
-  {
-    if (pchSrc[0] != '^') {
-      *pchDst++ = *pchSrc++;
-      continue;
+    while (pchSrc[0] != 0)
+    {
+        if (pchSrc[0] != '^') {
+            *pchDst++ = *pchSrc++;
+            continue;
+        }
+
+        switch (pchSrc[1]) {
+        case 'c': pchSrc += 2 + FindZero((UBYTE*)pchSrc + 2, 6); break;
+        case 'a': pchSrc += 2 + FindZero((UBYTE*)pchSrc + 2, 2); break;
+
+            // [Cecil] Skip 1 byte instead of 2
+        case 'f': pchSrc += 2 + FindZero((UBYTE*)pchSrc + 2, 1); break;
+
+        case 'b': case 'i': case 'r': case 'o':
+        case 'C': case 'A': case 'F': case 'B': case 'I': pchSrc += 2; break;
+        case '^': pchSrc++; *pchDst++ = *pchSrc++; break;
+
+        default:
+            *pchDst++ = *pchSrc++;
+            break;
+        }
     }
 
-    switch (pchSrc[1]) {
-      case 'c': pchSrc += 2 + FindZero((UBYTE *)pchSrc + 2, 6); break;
-      case 'a': pchSrc += 2 + FindZero((UBYTE *)pchSrc + 2, 2); break;
+    *pchDst++ = 0;
 
-      // [Cecil] Skip 1 byte instead of 2
-      case 'f': pchSrc += 2 + FindZero((UBYTE *)pchSrc + 2, 1); break;
-
-      case 'b': case 'i': case 'r': case 'o':
-      case 'C': case 'A': case 'F': case 'B': case 'I': pchSrc += 2; break;
-      case '^': pchSrc++; *pchDst++ = *pchSrc++; break;
-
-      default:
-        *pchDst++ = *pchSrc++;
-        break;
-    }
-  }
-
-  *pchDst++ = 0;
-
-  ASSERT(strResult.Length() <= Length());
-  return strResult;
+    ASSERT(strResult.Length() <= Length());
+    return strResult;
 };
 
 #endif // _PATCHCONFIG_FIX_STRINGS

@@ -22,6 +22,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <Core/Query/QueryManager.h>
 #include <Core/Networking/NetworkFunctions.h>
 
+#include <Core/Query/PlayerDB.h>    // 1111
+
 #if _PATCHCONFIG_EXTEND_NETWORK
 
 // Original function pointers
@@ -37,7 +39,7 @@ void CComIntPatch::P_EndWinsock(void) {
     if (ms_bDebugOutput) {
       CPutString("CCommunicationInterface::EndWinsock() -> IMasterServer::EnumCancel()\n");
     }
-
+    CPrintF("GameSpy lockout applied\n");
     IMasterServer::EnumCancel();
   }
 
@@ -57,6 +59,9 @@ void CComIntPatch::P_EndWinsock(void) {
 #endif // _PATCHCONFIG_NEW_QUERY
 
 void CComIntPatch::P_ServerInit(void) {
+  // [ADDED] Force vanilla's GameSpy heartbeat off before it gets a chance to read the flag
+  ICore::DisableGameSpy();  //  1111
+  
   // Proceed to the original function
   (this->*pServerInit)();
 
@@ -381,6 +386,9 @@ void CSessionStatePatch::P_FlushProcessedPredictions(void) {
   (this->*pFlushPredictions)();
 
 #if _PATCHCONFIG_NEW_QUERY
+  // [ADDED] Keep retrying to lock out vanilla's own GameSpy heartbeat until it succeeds
+  ICore::DisableGameSpy();  //  1111
+
   // Keep using old query manager
   if (ms_bVanillaQuery) return;
 
@@ -497,6 +505,32 @@ void CSessionStatePatch::P_ProcessGameStreamBlock(CNetworkMessage &nmMessage) {
       // Inform entity of disconnnection
       CPrintF(LOCALIZE("%s left\n"), penRemPlayer->GetPlayerName());
       penRemPlayer->Disconnect();
+
+      // Record session stats in stats DB (server only) 1111
+      if (_pNetwork->IsServer()) {
+          CPlayerBuffer& plb = _pNetwork->ga_srvServer.srv_aplbPlayers[iPlayer];
+
+          // GetGameSpyPlayerInfo is a virtual function — no game headers needed.
+          // Returns e.g. "\player_0\Name\frags_0\12\deaths_0\4\ping_0\80\"
+          CTString strInfo;
+          plt.plt_penPlayerEntity->GetGameSpyPlayerInfo(plb.plb_Index, strInfo);
+
+          INDEX iFrags = 0, iDeaths = 0;
+          CTString strKey;
+          const char* p;
+
+          strKey.PrintF("\\frags_%d\\", (int)plb.plb_Index);
+          p = strstr(strInfo.str_String, strKey.str_String);
+          if (p != NULL) sscanf(p + strKey.Length(), "%d", &iFrags);
+
+          strKey.PrintF("\\deaths_%d\\", (int)plb.plb_Index);
+          p = strstr(strInfo.str_String, strKey.str_String);
+          if (p != NULL) sscanf(p + strKey.Length(), "%d", &iDeaths);
+
+          PlayerDB_OnDisconnect(iPlayer,
+              _pNetwork->ga_World.wo_fnmFileName.str_String,
+              iFrags, iDeaths, 0);
+      }
 
       // Deactivate the player
       plt.Deactivate();

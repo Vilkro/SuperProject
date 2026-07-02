@@ -97,9 +97,13 @@
     <ClInclude Include="Patches\Textures.h" />
     <ClInclude Include="Patches\UnpageStreams.h" />
     <ClInclude Include="Patches\Worlds.h" />
+    <ClInclude Include="Query\DemoManager.h" />
+    <ClInclude Include="Query\GeoIP.h" />
+    <ClInclude Include="Query\PlayerDB.h" />
     <ClInclude Include="Query\QueryManager.h" />
     <ClInclude Include="Query\MasterServer.h" />
     <ClInclude Include="Query\ServerRequest.h" />
+    <ClInclude Include="Query\sqlite3.h" />
     <ClInclude Include="StdH.h" />
   </ItemGroup>
   <ItemGroup>
@@ -170,13 +174,20 @@
     <ClCompile Include="Patches\UnpageStreams.cpp" />
     <ClCompile Include="Patches\Worlds.cpp" />
     <ClCompile Include="Query\DarkPlacesQuery.cpp" />
+    <ClCompile Include="Query\DemoManager.cpp" />
     <ClCompile Include="Query\GameAgentQuery.cpp" />
+    <ClCompile Include="Query\GeoIP.cpp" />
     <ClCompile Include="Query\LegacyClientQuery.cpp" />
     <ClCompile Include="Query\LegacyServerQuery.cpp" />
     <ClCompile Include="Query\LegacyFunctions.cpp" />
+    <ClCompile Include="Query\PlayerDB.cpp" />
     <ClCompile Include="Query\QueryManager.cpp" />
     <ClCompile Include="Query\MasterServer.cpp" />
     <ClCompile Include="Query\ServerRequest.cpp" />
+    <ClCompile Include="Query\sqlite3.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_TSE107|Win32'">CompileAsC</CompileAs>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release_TSE107|Win32'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="StdH.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug_TSE107|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release_TSE105|Win32'">Create</PrecompiledHeader>

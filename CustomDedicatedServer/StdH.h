@@ -27,5 +27,11 @@ extern INDEX ded_bRestartWhenEmpty;
 extern FLOAT ded_tmTimeout;
 extern CTString ded_strForceLevelChange; // [Cecil]
 
+extern FLOAT ded_tmRestartWhenEmptyDelay;   // 1111
+extern INDEX ded_bRestartWhenPaused;        // 1111
+
+extern INDEX ded_bDisableLevelEnd;         // 1111
+extern INDEX ded_iTargetRound;   // 1111
+
 // Execute shell script
 void ExecScript(const CTString &str);

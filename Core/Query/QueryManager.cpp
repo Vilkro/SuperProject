@@ -17,12 +17,17 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "QueryManager.h"
 
+#include "Query/PlayerDB.h" //  1111
+#include "Query/DemoManager.h" //  1111
+
 #pragma comment(lib, "wsock32.lib")
 
 #if _PATCHCONFIG_NEW_QUERY
 
 static WSADATA *_wsaData = NULL;
-static sockaddr_in *_sin = NULL;
+// static sockaddr_in *_sin = NULL;
+static sockaddr_in* _sin = NULL;   // 333networks.com   1111
+static sockaddr_in* _sin2 = NULL;  // 42amsterdam.net   1111
 static sockaddr_in *_sinLocal = NULL;
 
 static SOCKET _socket = INVALID_SOCKET;
@@ -104,6 +109,9 @@ extern void InitQuery(void) {
   // Retrieve commonly used symbols
   _piNetPort.Find("net_iPort");
   _pstrLocalHost.Find("net_strLocalHost");
+
+  PlayerDB_Init();      // 1111
+  DemoManager_Init();   // 1111
 };
 
 namespace IQuery {
@@ -144,100 +152,114 @@ void Address::AddServerRequest(const char **ppBuffer, INDEX &iLength, const UWOR
   iLength -= iAddrLength;
 };
 
-// Initialize the socket
+// Initialize the socket    1111
 void InitWinsock(void) {
-  // Already initialized
-  if (_wsaData != NULL && _socket != INVALID_SOCKET) {
-    return;
-  }
-
-  // Create new socket address
-  _wsaData = new WSADATA;
-  _socket = INVALID_SOCKET;
-
-  // Start socket address
-  if (WSAStartup(MAKEWORD(2, 2), _wsaData) != 0) {
-    // Something went wrong
-    CPutString("Error initializing winsock!\n");
-    CloseWinsock();
-    return;
-  }
-
-  // Create a buffer for packets
-  if (pBuffer != NULL) {
-    delete[] pBuffer;
-  }
-  pBuffer = new char[2050];
-
-  // Get host from the address
-  const CTString &strMasterServerIP = _aProtocols[IMasterServer::GetProtocol()]->GetMS();
-  hostent* phe = gethostbyname(strMasterServerIP);
-
-  // Couldn't resolve the hostname
-  if (phe == NULL) {
-    CPrintF("Couldn't resolve the host server '%s'\n", strMasterServerIP);
-    CloseWinsock();
-    return;
-  }
-
-  // Create destination address
-  _sin = new sockaddr_in;
-  _sin->sin_family = AF_INET;
-  _sin->sin_addr.s_addr = *(ULONG *)phe->h_addr_list[0];
-
-  // Select master server port
-  const UWORD uwPort = _aProtocols[IMasterServer::GetProtocol()]->GetPort();
-  _sin->sin_port = htons(uwPort);
-
-  // Create the socket
-  _socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-
-  if (_socket == INVALID_SOCKET) {
-    CloseWinsock();
-    return;
-  }
-
-  // If it's a server
-  if (bServer) {
-    // Create local socket source address
-    _sinLocal = new sockaddr_in;
-    _sinLocal->sin_family = AF_INET;
-    _sinLocal->sin_addr.s_addr = inet_addr("0.0.0.0");
-    _sinLocal->sin_port = htons(_piNetPort.GetIndex() + 1);
-
-    // Allow receiving UDP broadcast
-    int iOpt = 1;
-
-    if (setsockopt(_socket, SOL_SOCKET, SO_BROADCAST, (char *)&iOpt, sizeof(iOpt)) != 0) {
-      CPutString("Couldn't allow receiving UDP broadcast for the socket!\n");
-      CloseWinsock();
-      return;
+    if (_wsaData != NULL && _socket != INVALID_SOCKET) {
+        return;
     }
 
-    // Bind the socket
-    bind(_socket, (sockaddr *)_sinLocal, sizeof(*_sinLocal));
-  }
+    _wsaData = new WSADATA;
+    _socket = INVALID_SOCKET;
 
-  // Set socket to be non-blocking
-  DWORD dwNonBlocking = 1;
+    if (WSAStartup(MAKEWORD(2, 2), _wsaData) != 0) {
+        CPutString("Error initializing winsock!\n");
+        CloseWinsock();
+        return;
+    }
 
-  if (ioctlsocket(_socket, FIONBIO, &dwNonBlocking) != 0) {
-    CPutString("Couldn't make socket non-blocking!\n");
-    CloseWinsock();
-  }
+    if (pBuffer != NULL) {
+        delete[] pBuffer;
+    }
+    pBuffer = new char[2050];
+
+    // Get the port from the active protocol
+    const UWORD uwPort = _aProtocols[IMasterServer::GetProtocol()]->GetPort();
+
+    // Resolve primary master server (333networks.com)
+    {
+        hostent* phe = gethostbyname("333networks.com");
+        if (phe == NULL) {
+            CPutString("Couldn't resolve primary master server '333networks.com'\n");
+        }
+        else {
+            _sin = new sockaddr_in;
+            _sin->sin_family = AF_INET;
+            _sin->sin_addr.s_addr = *(ULONG*)phe->h_addr_list[0];
+            _sin->sin_port = htons(uwPort);
+        }
+    }
+
+    // Resolve secondary master server (42amsterdam.net)
+    {
+        hostent* phe = gethostbyname("42amsterdam.net");
+        if (phe == NULL) {
+            CPutString("Couldn't resolve secondary master server '42amsterdam.net'\n");
+        }
+        else {
+            _sin2 = new sockaddr_in;
+            _sin2->sin_family = AF_INET;
+            _sin2->sin_addr.s_addr = *(ULONG*)phe->h_addr_list[0];
+            _sin2->sin_port = htons(uwPort);
+        }
+    }
+
+    // Abort if neither resolved
+    if (_sin == NULL && _sin2 == NULL) {
+        CPutString("Couldn't resolve any master server — aborting socket init\n");
+        CloseWinsock();
+        return;
+    }
+
+    _socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (_socket == INVALID_SOCKET) {
+        CloseWinsock();
+        return;
+    }
+
+    if (bServer) {
+        _sinLocal = new sockaddr_in;
+        _sinLocal->sin_family = AF_INET;
+        _sinLocal->sin_addr.s_addr = inet_addr("0.0.0.0");
+        _sinLocal->sin_port = htons(_piNetPort.GetIndex() + 1);
+
+        int iOpt = 1;
+        if (setsockopt(_socket, SOL_SOCKET, SO_BROADCAST, (char*)&iOpt, sizeof(iOpt)) != 0) {
+            CPutString("Couldn't allow receiving UDP broadcast for the socket!\n");
+            CloseWinsock();
+            return;
+        }
+
+        bind(_socket, (sockaddr*)_sinLocal, sizeof(*_sinLocal));
+    }
+
+    DWORD dwNonBlocking = 1;
+    if (ioctlsocket(_socket, FIONBIO, &dwNonBlocking) != 0) {
+        CPutString("Couldn't make socket non-blocking!\n");
+        CloseWinsock();
+    }
 };
 
-// Close the socket
+// Close the socket 1111
 void CloseWinsock(void) {
-  if (_socket != INVALID_SOCKET) {
-    closesocket(_socket);
-    _socket = INVALID_SOCKET;
-  }
+    if (_socket != INVALID_SOCKET) {
+        closesocket(_socket);
+        _socket = INVALID_SOCKET;
+    }
 
-  if (_wsaData != NULL) {
-    delete _wsaData;
-    _wsaData = NULL;
-  }
+    if (_sin != NULL) {
+        delete _sin;
+        _sin = NULL;
+    }
+
+    if (_sin2 != NULL) {
+        delete _sin2;
+        _sin2 = NULL;
+    }
+
+    if (_wsaData != NULL) {
+        delete _wsaData;
+        _wsaData = NULL;
+    }
 };
 
 // Check if the socket is usable
@@ -245,17 +267,21 @@ BOOL IsSocketUsable(void) {
   return (_socket != INVALID_SOCKET && bInitialized);
 };
 
-// Send packet with data from a buffer
-void SendPacket(const char *pBuffer, int iLength) {
-  // Initialize the socket in case it's not
-  InitWinsock();
+// Send packet with data from a buffer  1111
+void SendPacket(const char* pBuffer, int iLength) {
+    InitWinsock();
 
-  // Calculate buffer length
-  if (iLength == -1) {
-    iLength = (int)strlen(pBuffer);
-  }
+    if (iLength == -1) {
+        iLength = (int)strlen(pBuffer);
+    }
 
-  SendPacketTo(_sin, pBuffer, iLength);
+    if (_sin != NULL) {
+        SendPacketTo(_sin, pBuffer, iLength);
+    }
+
+    if (_sin2 != NULL) {
+        SendPacketTo(_sin2, pBuffer, iLength);
+    }
 };
 
 // Send data packet to a specific socket address

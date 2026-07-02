@@ -24,6 +24,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "StreamBlock.h"
 #include "MessageCompression.h"
 
+// ---- 1111 ------------------------------------------------------------------
+CTString ColorizeNick_Impl(const CTString& strIn);
+// ---------------------------------------------------------------------------
+
 // Interface of network methods
 class CORE_API INetwork {
   public:

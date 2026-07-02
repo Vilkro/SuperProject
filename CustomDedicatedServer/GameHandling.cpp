@@ -24,6 +24,12 @@ BOOL _bHadPlayers = FALSE;
 BOOL _bRestart = FALSE;
 
 CTimerValue _tvLastLevelEnd(-1i64);
+static CTimerValue _tvEmptySince(-1i64);   // 1111 - when the server first went empty
+
+static CTFileName _fnmLastKnownWorld;   // 1111 - default-constructs empty, no need to force it
+
+static CTFileName _fnmLastWorld;          // 1111 - tracks loaded world for coop detection
+static BOOL _bSkipNextWorldChange = FALSE;    // 1111 - set before intentional map loads
 
 static CTString strBegScript;
 static CTString strEndScript;
@@ -103,10 +109,13 @@ void RoundBegin(void)
     CPutString(LOCALIZE("ERROR: No next level specified!\n"));
     _bRunning = FALSE;
 
-  } else if (StartNewMap()) {
-    CPutString(LOCALIZE("\nALL OK: Dedicated server is now running!\n"));
-    CPutString(LOCALIZE("Use Ctrl+C to shutdown the server.\n"));
-    CPutString(LOCALIZE("DO NOT use the 'Close' button, it might leave the port hanging!\n\n"));
+  } else {
+      _bSkipNextWorldChange = TRUE;     // 1111 - server is starting this load deliberately
+      if (StartNewMap()) {
+          CPutString(LOCALIZE("\nALL OK: Dedicated server is now running!\n"));
+          CPutString(LOCALIZE("Use Ctrl+C to shutdown the server.\n"));
+          CPutString(LOCALIZE("DO NOT use the 'Close' button, it might leave the port hanging!\n\n"));
+      }
   }
 };
 
@@ -141,6 +150,7 @@ BOOL StartNewMap(void) {
 
   DisableLoadingHook();
   _tvLastLevelEnd = CTimerValue(-1i64);
+  _tvEmptySince = CTimerValue(-1i64);   // 1111
 
   return TRUE;
 };
@@ -165,50 +175,107 @@ static void LimitFrameRate(void) {
   tvLast = _pTimer->GetHighPrecisionTimer();
 };
 
+// [1111] returns TRUE once ded_tmRestartWhenEmptyDelay seconds have passed
+// since the room became empty (tracked in _tvEmptySince).
+static BOOL EmptyDelayElapsed(void)
+{
+    if (_tvEmptySince.tv_llValue < 0) {
+        _tvEmptySince = _pTimer->GetHighPrecisionTimer();
+    }
+    return (_pTimer->GetHighPrecisionTimer() - _tvEmptySince).GetSeconds() >= ded_tmRestartWhenEmptyDelay;
+}
+
+// [1111] Fires when the engine loads a new world during GameMainLoop (coop level finish).
+// Unlike RoundBegin, the map is ALREADY loaded here — we only run scripts.
+static void OnCoopLevelChange(const CTFileName& fnmNew)
+{
+    CPutString("end of round (coop)---------------------------\n");
+    ExecScript(strEndScript);
+    _iRound++;
+
+    // pick up the next begin/end ini, wrapping to 1 if N doesn't exist
+    FOREVER{
+      strBegScript.PrintF("%s%d_begin.ini", ded_strConfig, _iRound);
+      strEndScript.PrintF("%s%d_end.ini",   ded_strConfig, _iRound);
+
+      if (FileExists(strBegScript)) break;
+
+      if (_iRound == 1) {
+        CPutString(LOCALIZE("No scripts present!\n"));
+        return;
+      }
+      _iRound = 1;
+    }
+
+    CPutString("begin of round (coop)---------------------------\n");
+    ExecScript(strBegScript);           // run begin ini — map is already loaded
+
+    _tvLastLevelEnd = CTimerValue(-1i64);   // prevent IsGameFinished path from double-firing
+}
+
 // Main game loop
 void DoGame(void)
 {
-  // do the main game loop
-  if (GetGameAPI()->IsGameOn()) {
-    _pGame->GameMainLoop();
+    if (GetGameAPI()->IsGameOn()) {
+        _pGame->GameMainLoop();
 
-    // if any player is connected
-    if (_pGame->GetPlayersCount()) {
-      if (!_bHadPlayers) {
-        // unpause server
-        if (_pNetwork->IsPaused()) {
-          _pNetwork->TogglePause();
+        // ---- detect coop level transitions - world changed inside GameMainLoop ----  1111
+        const CTFileName& fnmCurrent = _pNetwork->ga_World.wo_fnmFileName;
+        if (_fnmLastWorld != "" && fnmCurrent != "" && fnmCurrent != _fnmLastWorld) {
+            if (_bSkipNextWorldChange) {
+                _bSkipNextWorldChange = FALSE;    // intentional load — clear and skip
+            }
+            else {
+                OnCoopLevelChange(fnmCurrent);    // genuine coop transition
+            }
         }
-      }
-
-      // remember that
-      _bHadPlayers = TRUE;
-
-    // if no player is connected
-    } else {
-      // if was before
-      if (_bHadPlayers) {
-        // make it restart
-        _bRestart = TRUE;
-
-      // if never had any player yet
-      } else {
-        // keep the server paused
-        if (!_pNetwork->IsPaused()) {
-          _pNetwork->TogglePause();
+        if (fnmCurrent != "") {
+            _fnmLastWorld = fnmCurrent;
         }
-      }
+        // -----------------------------------------------------------------------------
+
+        // if any player is connected
+        if (_pGame->GetPlayersCount()) {
+            if (!_bHadPlayers) {
+                if (_pNetwork->IsPaused()) {
+                    _pNetwork->TogglePause();
+                }
+            }
+            _bHadPlayers = TRUE;
+            _tvEmptySince = CTimerValue(-1i64);                                   // 1111
+
+            // if no player is connected
+        }
+        else {
+            // never had any player yet - keep paused, same as before
+                if (!_bHadPlayers) {
+                    if (!_pNetwork->IsPaused()) {
+                        _pNetwork->TogglePause();
+                    }
+
+                    // [1111] only restart while waiting for the first-ever player
+                    // if explicitly enabled - default off, preserves old behavior.
+                    if (ded_bRestartWhenPaused && EmptyDelayElapsed()) {
+                        _bRestart = TRUE;
+                    }
+
+                    // had players, room just emptied
+                }
+                else {
+                    if (EmptyDelayElapsed()) {
+                        _bRestart = TRUE;
+                    }
+            }
+        }
+
+    }
+    else {
+    // just handle broadcast messages
+        _pNetwork->GameInactive();
     }
 
-  // if game is not started
-  } else {
-    // just handle broadcast messages
-    _pNetwork->GameInactive();
-  }
-
   // [Cecil] Update current vote
-  IVotingSystem::UpdateVote();
-
+    IVotingSystem::UpdateVote();
   // limit current frame rate if needed
-  LimitFrameRate();
+    LimitFrameRate();
 };

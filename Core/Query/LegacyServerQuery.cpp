@@ -14,6 +14,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA. */
 
 #include "StdH.h"
+#include "Query/GeoIP.h"            // 1111
+#include "Networking/Modules.h"     // 1111 — IClientLogging::GetAddress
 
 #if _PATCHCONFIG_NEW_QUERY
 
@@ -30,6 +32,26 @@ static const char *_strStatusResponseFormat =
   "\\friendlyfire\\%d\\weaponsstay\\%d\\ammosstay\\%d"
   "\\healthandarmorstays\\%d\\allowhealth\\%d\\allowarmor\\%d\\infiniteammo\\%d\\respawninplace\\%d"
   "\\password\\0\\vipplayers\\1";
+
+/* Append \country_N\..\city_N\..\ for the dashboard, if resolved.   1111 */
+static void AppendGeoFields(CTString& strPlayer, const CPlayerBuffer& plb) {   /* 1111 */
+    if (plb.plb_iClient <= 0) return;
+
+    SClientAddress addr;
+    IClientLogging::GetAddress(addr, plb.plb_iClient);
+    CTString strIP = addr.GetIPAsString();
+    if (strIP == "") return;
+
+    CTString strCity, strCountry;
+    GeoIP_GetCachedSplit(strIP.str_String, strCity, strCountry);
+    if (strCountry == "") return;
+
+    CTString strGeoFields;
+    strGeoFields.PrintF("\\country_%d\\%s\\city_%d\\%s\\",
+        (int)plb.plb_Index, strCountry.str_String,
+        (int)plb.plb_Index, strCity.str_String);
+    strPlayer += strGeoFields;
+}
 
 void ILegacy::BuildHearthbeatPacket(CTString &strPacket, INDEX iChallenge) {
   strPacket.PrintF("\\heartbeat\\%hu\\gamename\\%s", (_piNetPort.GetIndex() + 1), SAM_MS_NAME);
@@ -94,6 +116,7 @@ void ILegacy::ServerParsePacket(INDEX iLength) {
         // Get info about an individual player
         CTString strPlayer;
         plt.plt_penPlayerEntity->GetGameSpyPlayerInfo(plb.plb_Index, strPlayer);
+        AppendGeoFields(strPlayer, plb);   // 1111
 
         // If not enough space for the next player info
         if (strPacket.Length() + strPlayer.Length() > 2048) {
@@ -168,6 +191,7 @@ void ILegacy::ServerParsePacket(INDEX iLength) {
         // Get info about an individual player
         CTString strPlayer;
         plt.plt_penPlayerEntity->GetGameSpyPlayerInfo(plb.plb_Index, strPlayer);
+        AppendGeoFields(strPlayer, plb);   // 1111
 
         // If not enough space for the next player info
         if (strPacket.Length() + strPlayer.Length() > 2048) {

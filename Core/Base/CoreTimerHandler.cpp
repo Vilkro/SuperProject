@@ -20,6 +20,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "Networking/Modules.h"
 #include "Networking/ExtPackets.h"
 
+#include "ScriptScheduler.h"    //  1111
+#include "Query/PlayerDB.h"  // 1111: PlayerDB_ProcessCommands
+
 // Define pointer to the timer handler
 CCoreTimerHandler *_pTimerHandler = NULL;
 
@@ -55,6 +58,9 @@ void CCoreTimerHandler::OnTick(void)
   // Check on annoying clients
   CActiveClient::CheckAnnoyingClients();
 
+  // Fire any due scheduled scripts     1111
+  IScriptScheduler::Tick();
+
   // Call per-tick function for each plugin
   FOREACHPLUGIN(itPlugin) {
     if (itPlugin->pm_events.m_timer->OnTick == NULL) continue;
@@ -82,4 +88,7 @@ void CCoreTimerHandler::OnSecond(void)
 
     itPlugin->pm_events.m_timer->OnSecond();
   }
+
+  // Process web admin command queue (kick/mute/unmute)  1111
+  PlayerDB_ProcessCommands();
 };

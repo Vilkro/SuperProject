@@ -21,6 +21,32 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "Query/QueryManager.h"
 
+#include "Query/PlayerDB.h" // 1111
+#include "Query/GeoIP.h"    // 1111
+
+// Join event context - set before executing cmd_cmdOnJoin  1111
+static CTString cmd_cmdOnJoin = "";
+static CTString cmd_strJoinName = "";
+static CTString cmd_strJoinIP = "";
+static INDEX    cmd_iJoinClient = -1;
+static INDEX    cmd_iJoinPlayer = -1;
+static INDEX    cmd_iChatClient = -1;
+
+// Chat event script and context variables    1111
+static CTString cmd_cmdOnChat = "";
+static CTString cmd_strChatMessage = "";
+static CTString cmd_strSilentChatCommands = "";  // ';'-separated exact matches that never get broadcast
+
+// Extra strings    1111
+static CTString cmd_strFirstExtra = "";
+static CTString cmd_strSecondExtra = "";
+static CTString cmd_strThirdExtra = "";
+static CTString cmd_strFourthExtra = "";
+static CTString cmd_strFifthExtra = "";
+static CTString cmd_strSixthExtra = "";
+static CTString cmd_strSeventhExtra = "";
+static CTString cmd_strEighthExtra = "";
+
 // Which client sent last packet to the server
 INDEX IProcessPacket::_iHandlingClient = IProcessPacket::CLT_NONE;
 
@@ -67,6 +93,29 @@ void IProcessPacket::RegisterCommands(void) {
 
   _pShell->DeclareSymbol("persistent user INDEX ser_bReportSyncBadToClients;", &_bReportSyncBadToClients);
   _pShell->DeclareSymbol("persistent user INDEX ser_bForbidVanilla pre:UpdateServerSymbolValue;", &_bForbidVanilla);
+
+  // Join event script and context variables    1111
+  _pShell->DeclareSymbol("persistent user CTString cmd_cmdOnJoin;", &cmd_cmdOnJoin);
+  _pShell->DeclareSymbol("user CTString cmd_strJoinName;", &cmd_strJoinName);
+  _pShell->DeclareSymbol("user CTString cmd_strJoinIP;", &cmd_strJoinIP);
+  _pShell->DeclareSymbol("user INDEX    cmd_iJoinClient;", &cmd_iJoinClient);
+  _pShell->DeclareSymbol("user INDEX    cmd_iJoinPlayer;", &cmd_iJoinPlayer);
+  _pShell->DeclareSymbol("user INDEX cmd_iChatClient;", &cmd_iChatClient);
+
+  // Chat event script and context variables    1111
+  _pShell->DeclareSymbol("persistent user CTString cmd_cmdOnChat;", &cmd_cmdOnChat);
+  _pShell->DeclareSymbol("user CTString cmd_strChatMessage;", &cmd_strChatMessage);
+  _pShell->DeclareSymbol("persistent user CTString cmd_strSilentChatCommands;", &cmd_strSilentChatCommands);
+
+  // Extra strings    1111
+  _pShell->DeclareSymbol("user CTString cmd_strFirstExtra;", &cmd_strFirstExtra);
+  _pShell->DeclareSymbol("user CTString cmd_strSecondExtra;", &cmd_strSecondExtra);
+  _pShell->DeclareSymbol("user CTString cmd_strThirdExtra;", &cmd_strThirdExtra);
+  _pShell->DeclareSymbol("user CTString cmd_strFourthExtra;", &cmd_strFourthExtra);
+  _pShell->DeclareSymbol("user CTString cmd_strFifthExtra;", &cmd_strFifthExtra);
+  _pShell->DeclareSymbol("user CTString cmd_strSixthExtra;", &cmd_strSixthExtra);
+  _pShell->DeclareSymbol("user CTString cmd_strSeventhExtra;", &cmd_strSeventhExtra);
+  _pShell->DeclareSymbol("user CTString cmd_strEighthExtra;", &cmd_strEighthExtra);
 
 #if _PATCHCONFIG_GAMEPLAY_EXT
   // Gameplay extensions
@@ -264,14 +313,14 @@ void IProcessPacket::OnConnectRemoteSessionStateRequest(INDEX iClient, CNetworkM
   if (bBanned == !pbWhiteList.GetIndex()) {
     // No specific ban record
     if (!bBanned) {
-      INetwork::SendDisconnectMessage(iClient, TRANS("You are not allowed on this server!"), TRUE);
+      INetwork::SendDisconnectMessage(iClient, TRANS("\n^cff1111YOU ARE NOT ALLOWED ON THIS SERVER!^r"), TRUE);
       return;
     }
 
     CTString strTime, strReason;
     cr.PrintBanTime(strTime);
 
-    strReason.PrintF(TRANS("You have been banned for %s!"), strTime);
+    strReason.PrintF(TRANS("\n^cff1111YOU HAVE BEEN BANNED FOR %s!^r"), strTime);
     INetwork::SendDisconnectMessage(iClient, strReason, TRUE);
     return;
   }
@@ -281,7 +330,7 @@ void IProcessPacket::OnConnectRemoteSessionStateRequest(INDEX iClient, CNetworkM
 
   // IP address is banned
   if (IData::MatchesMask(GetComm().Server_GetClientName(iClient), pstrIPMask.GetString()) == !pbWhiteList.GetIndex()) {
-    INetwork::SendDisconnectMessage(iClient, LOCALIZE("You are banned from this server"), TRUE);
+    INetwork::SendDisconnectMessage(iClient, LOCALIZE("\n^cff1111YOU ARE BANNED FROM THIS SERVER^r"), TRUE);
     return;
   }
 
@@ -497,9 +546,30 @@ void IProcessPacket::OnPlayerConnectRequest(INDEX iClient, CNetworkMessage &nmMe
 
     // Character name is banned
     if (IData::MatchesMask(pcCharacter.GetName(), pstrNameMask.GetString()) == !pbWhiteList.GetIndex()) {
-      INetwork::SendDisconnectMessage(iClient, LOCALIZE("You are banned from this server"), FALSE);
+      INetwork::SendDisconnectMessage(iClient, LOCALIZE("\n^cff1111YOU ARE BANNED FROM THIS SERVER^r"), FALSE);
       return;
     }
+
+    // ── 1111: check SQLite bans table ─────────────────────────────────────
+    {
+        char szBanGUID[33];
+        PlayerDB_FormatGUID(pcCharacter.pc_aubGUID, szBanGUID);
+
+        SClientAddress banAddr;
+        IClientLogging::GetAddress(banAddr, iClient);
+        ULONG ulBanIP = banAddr.GetIP();
+        char szBanIP[16];
+        wsprintfA(szBanIP, "%u.%u.%u.%u",
+            (ulBanIP >> 24) & 0xFF, (ulBanIP >> 16) & 0xFF,
+            (ulBanIP >> 8) & 0xFF, ulBanIP & 0xFF);
+
+        CTString strBanReason = PlayerDB_CheckBan(szBanGUID, szBanIP);
+        if (strBanReason != "") {
+            INetwork::SendDisconnectMessage(iClient, strBanReason, FALSE);
+            return;
+        }
+    }
+    // ── end 1111 ──────────────────────────────────────────────────────────
   }
 
   CServer &srv = _pNetwork->ga_srvServer;
@@ -597,6 +667,37 @@ void IProcessPacket::OnPlayerConnectRequest(INDEX iClient, CNetworkMessage &nmMe
     ASSERT(acClient.IsActive() && acClient.pClient == pci);
 
     acClient.AddPlayer(pplbNew);
+
+    // Record player in stats DB    1111
+    {
+        SClientAddress addr;
+        IClientLogging::GetAddress(addr, iClient);
+        ULONG ulIP = addr.GetIP();
+        char szIP[16];
+        wsprintfA(szIP, "%u.%u.%u.%u",
+            (ulIP >> 24) & 0xFF, (ulIP >> 16) & 0xFF,
+            (ulIP >> 8) & 0xFF, ulIP & 0xFF);
+
+        PlayerDB_OnJoin(iNewPlayer, pcCharacter.pc_aubGUID,
+            pcCharacter.GetName(), szIP);
+
+        GeoIP_Lookup(szIP);
+
+        // [Cecil] Fire player join script event    1111
+        if (cmd_cmdOnJoin != "") {
+            cmd_strJoinName = CTString(pcCharacter.GetName());
+            cmd_strJoinIP = szIP;
+            cmd_iJoinClient = (INDEX)iClient;
+            cmd_iJoinPlayer = (INDEX)iNewPlayer;
+
+            _pShell->Execute(cmd_cmdOnJoin + "\n");
+
+            cmd_strJoinName = "";
+            cmd_strJoinIP = "";
+            cmd_iJoinClient = -1;
+            cmd_iJoinPlayer = -1;
+        }
+    }
 
     // Notify master server that a player is connecting
     static CSymbolPtr symptr("ser_bEnumeration");
@@ -853,18 +954,18 @@ void IProcessPacket::OnSyncCheck(INDEX iClient, CNetworkMessage &nmMessage) {
         CPutString(strSyncBad);
 
         // [Cecil] Report bad syncs to the client
-        if (_bReportSyncBadToClients) {
-          strSyncBad.PrintF(TRANS("SYNCBAD: Sequence %d Tick %.2f - bad %d"),
+        if (_bReportSyncBadToClients && (sso.sso_ctBadSyncs % 10 == 0)) {   //  Added mod 10 statement  1111
+          strSyncBad.PrintF(TRANS("^CSequence %d Tick %.2f - ^cff2e2ebad %d^r"),
             scRemote.sc_iSequence, tmTick, sso.sso_ctBadSyncs);
 
-          INetwork::SendChatToClient(iClient, LOCALIZE("Server"), strSyncBad);
+          INetwork::SendChatToClient(iClient, LOCALIZE("^cff2e2eSYNCBAD"), strSyncBad);
         }
       }
 
       // Kick from too many bad sync
       if (piKickOnSyncBad.GetIndex() > 0) {
         if (sso.sso_ctBadSyncs >= piKickOnSyncBad.GetIndex()) {
-          INetwork::SendDisconnectMessage(iClient, LOCALIZE("Too many bad syncs"), FALSE);
+          INetwork::SendDisconnectMessage(iClient, LOCALIZE("\n^cf8f644TOO MANY BAD SYNC^r"), FALSE);
         }
 
       // Pause on any bad sync
@@ -902,6 +1003,28 @@ void IProcessPacket::OnSyncCheck(INDEX iClient, CNetworkMessage &nmMessage) {
   }
 };
 
+// Must be outside the function to link to the global variable in NetworkFunctions.cpp  1111
+extern CTString ser_strChatName;
+
+// Exact-match lookup against cmd_strSilentChatCommands (';'-separated).
+// This decision is made WITHOUT running any script, so it never depends on
+// (or gets delayed by) script output -- keeps message ordering correct.   1111
+static BOOL IsSilentChatCommand(const CTString& strMsg) {
+    if (cmd_strSilentChatCommands == "" || strMsg == "") return FALSE;
+
+    char szList[512];
+    strncpy(szList, cmd_strSilentChatCommands.str_String, sizeof(szList) - 1);
+    szList[sizeof(szList) - 1] = '\0';
+
+    char* pToken = strtok(szList, ";");
+
+    while (pToken != NULL) {
+        if (strMsg == CTString(pToken)) return TRUE;
+        pToken = strtok(NULL, ";");
+    }
+    return FALSE;
+}
+
 // Client sending a chat message
 BOOL IProcessPacket::OnChatInRequest(INDEX iClient, CNetworkMessage &nmMessage)
 {
@@ -931,5 +1054,105 @@ BOOL IProcessPacket::OnChatInRequest(INDEX iClient, CNetworkMessage &nmMessage)
     return HandleChatCommand(iClient, strMessage);
   }
 
-  return TRUE;
+  // ==== Hijack chat routing ====  1111
+
+  cmd_iChatClient = iClient;
+
+  // Silent commands (e.g. "@en") never get broadcast at all -- run
+  // the reaction script now and return; there's no original message for
+  // the response to be out of order with.    1111
+  if (IsSilentChatCommand(strMessage)) {
+      if (cmd_cmdOnChat != "") {
+          cmd_strChatMessage = strMessage;
+          _pShell->Execute(cmd_cmdOnChat + "\n");
+          cmd_strChatMessage = "";
+      }
+      return FALSE;
+  }
+
+  CServer& srv = _pNetwork->ga_srvServer;
+
+  // --- REIMPLEMENTED MaskOfPlayersOnClient ---
+  // Create a bitmask of players that belong to this client
+  ULONG ulClientPlayers = 0;
+  for (INDEX ipl = 0; ipl < srv.srv_aplbPlayers.Count(); ipl++) {
+      CPlayerBuffer& plb = srv.srv_aplbPlayers[ipl];
+      if (plb.IsActive() && plb.plb_iClient == iClient) {
+          ulClientPlayers |= (1UL << ipl);
+      }
+  }
+  // -------------------------------------------
+
+  // Filter the from address by the client's players
+  ulFrom &= ulClientPlayers;
+  if (ulFrom == 0) {
+      ulTo = -1; // Public message
+  }
+
+  // Resolve and colorize sender name for player chat   1111
+  CTString strColorizedSender = "";
+  if (ulFrom != 0) {
+      for (INDEX ipl = 0; ipl < srv.srv_aplbPlayers.Count(); ipl++) {
+          if (!(ulFrom & (1UL << ipl))) continue;
+          CPlayerBuffer& plb = srv.srv_aplbPlayers[ipl];
+          if (plb.IsActive()) {
+              strColorizedSender = ColorizeNick_Impl(plb.plb_pcCharacter.GetName());
+          }
+          break;
+      }
+  }
+
+  // Create custom outgoing chat message
+  CNetworkMessage nmOut(MSG_CHAT_OUT);
+  // was: nmOut << ulFrom;
+  nmOut << (INDEX)0;    //  1111
+
+  if (ulFrom == 0) {
+      CTString strFrom;
+      if (iClient == 0) {
+          // Use our custom variable, with a fallback if the user clears the string 1111
+          strFrom = (ser_strChatName != "") ? ser_strChatName : TRANS("Server");
+      }
+      else {
+          strFrom.PrintF(TRANS("Client %d"), iClient);
+      }
+      nmOut << strFrom;
+  } 
+  else {
+      // Player: use the colorized name resolved above  1111
+      nmOut << strColorizedSender;
+  }
+
+  nmOut << strMessage;
+
+  // Broadcast to all relevant clients
+  for (INDEX iSession = 0; iSession < srv.srv_assoSessions.Count(); iSession++) {
+      CSessionSocket& sso = srv.srv_assoSessions[iSession];
+      if (iSession > 0 && !sso.IsActive()) continue;
+
+      // --- REIMPLEMENTED MaskOfPlayersOnClient (for destination check) ---
+      ULONG ulDestPlayers = 0;
+      for (INDEX ipl = 0; ipl < srv.srv_aplbPlayers.Count(); ipl++) {
+          CPlayerBuffer& plb = srv.srv_aplbPlayers[ipl];
+          if (plb.IsActive() && plb.plb_iClient == iSession) {
+              ulDestPlayers |= (1UL << ipl);
+          }
+      }
+      // -------------------------------------------------------------------
+
+      if (ulTo == -1 || (ulTo & ulDestPlayers)) {
+          _pNetwork->SendToClient(iSession, nmOut);
+      }
+  }
+
+  // Fire chat script event AFTER the original message has already
+  // gone out, so any reply the script sends is always ordered after it   1111
+  if (cmd_cmdOnChat != "") {
+      cmd_strChatMessage = strMessage;
+      _pShell->Execute(cmd_cmdOnChat + "\n");
+      cmd_strChatMessage = "";
+  }
+
+  // Return FALSE so the vanilla engine doesn't double-process the packet
+  return FALSE;
 };

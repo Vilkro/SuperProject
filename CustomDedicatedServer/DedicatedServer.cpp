@@ -22,6 +22,14 @@ CTString ded_strLevel = "";
 INDEX ded_bRestartWhenEmpty = TRUE;
 FLOAT ded_tmTimeout = -1;
 
+INDEX ded_bRestartWhenPaused = 0;   // 1111
+FLOAT ded_tmRestartWhenEmptyDelay = 0;   // 1111
+
+// #define MAX_ROUNDS 64
+// CTString ded_astrRoundLevels[MAX_ROUNDS + 1];   // 1111  [N] = level path for round N
+INDEX ded_iTargetRound = -1;   // 1111 - round to jump to on next nextmap(); -1 = natural increment
+INDEX ded_bDisableLevelEnd = 0;                  // 1111  suppress natural coop level finish
+
 // [Cecil] Change level of the current round mid-game
 CTString ded_strForceLevelChange = "";
 
@@ -143,6 +151,12 @@ BOOL Init(int argc, char *argv[])
   _pShell->DeclareSymbol("user void Restart(void);", &RestartGame);
   _pShell->DeclareSymbol("user void NextMap(void);", &NextMap);
 
+  _pShell->DeclareSymbol("user INDEX ded_bRestartWhenPaused;", &ded_bRestartWhenPaused);   // 1111
+  _pShell->DeclareSymbol("user FLOAT ded_tmRestartWhenEmptyDelay;", &ded_tmRestartWhenEmptyDelay);   // 1111
+
+  _pShell->DeclareSymbol("user INDEX ded_iTargetRound;", &ded_iTargetRound);   // 1111
+  _pShell->DeclareSymbol("user INDEX ded_bDisableLevelEnd;", &ded_bDisableLevelEnd); // 1111
+
   // [Cecil] Custom symbols
   _pShell->DeclareSymbol("user CTString ded_strForceLevelChange;", &ded_strForceLevelChange);
 
@@ -212,7 +226,7 @@ int SubMain(int argc, char *argv[])
     DoGame();
 
     // if game is finished
-    if (_pNetwork->IsGameFinished()) {
+    if (!ded_bDisableLevelEnd && _pNetwork->IsGameFinished()) { //  1111 gate natural level end
       // if not yet remembered end of level
       if (_tvLastLevelEnd.tv_llValue < 0) {
         // remember end of level
@@ -261,8 +275,16 @@ int SubMain(int argc, char *argv[])
     }
 
     if (_bForceNextMap) {
-      StartNewMap();
+      //StartNewMap();
       _bForceNextMap = FALSE;
+      RoundEnd(FALSE);                    // runs current end ini, _iRound++
+
+      if (ded_iTargetRound > 0) {
+          _iRound = ded_iTargetRound;
+          ded_iTargetRound = -1;
+      }
+
+      RoundBegin();                       // runs iTargetRound_begin.ini, loads its map
     }
 
   } // end of main application loop
