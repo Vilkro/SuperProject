@@ -288,6 +288,9 @@
     <ClInclude Include="Query\sqlite3.h">
       <Filter>Header Files\Query headers</Filter>
     </ClInclude>
+    <ClInclude Include="ScriptScheduler.h">
+      <Filter>Header Files\Base headers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="StdH.cpp">
@@ -526,6 +529,9 @@
     </ClCompile>
     <ClCompile Include="Query\sqlite3.c">
       <Filter>Source Files\Query</Filter>
+    </ClCompile>
+    <ClCompile Include="ScriptScheduler.cpp">
+      <Filter>Source Files\Base</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
