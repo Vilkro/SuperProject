@@ -28,6 +28,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 CTString ColorizeNick_Impl(const CTString& strIn);
 // ---------------------------------------------------------------------------
 
+const CTString& SelectLangMessage(INDEX iClient, const CTString& strEN, const CTString& strRU);  // 1111
+
 // Interface of network methods
 class CORE_API INetwork {
   public:

@@ -148,7 +148,7 @@ CTString CClientRestriction::BanClient(INDEX iIdentity, DOUBLE fTime) {
     }
 
     CTString strReason;
-    strReason.PrintF(TRANS("You have been banned for %s!"), strTime);
+    strReason.PrintF(TRANS("\n^cff1111YOU HAVE BEEN BANNED FOR %s!^r"), strTime);
 
     INetwork::SendDisconnectMessage(iBanClient, strReason, FALSE);
   }

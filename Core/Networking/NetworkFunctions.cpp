@@ -48,6 +48,7 @@ void ExecuteMapChange(SHELL_FUNC_ARGS);    // 1111  fires after the countdown
 void ListClients(SHELL_FUNC_ARGS);              // 1111
 void VoteForKick(SHELL_FUNC_ARGS);              // 1111
 void VoteForBan(SHELL_FUNC_ARGS);               // 1111
+void BanClientTemp(SHELL_FUNC_ARGS);            // 1111
 void CastPlayerVote(SHELL_FUNC_ARGS);           // 1111
 void PlayerVoteTimeoutCheck(SHELL_FUNC_ARGS);   // 1111
 
@@ -93,6 +94,7 @@ void INetwork::Initialize(void) {
   _pShell->DeclareSymbol("user void ListClients(INDEX);",             &ListClients);             // 1111
   _pShell->DeclareSymbol("user void VoteForKick(INDEX, INDEX);",      &VoteForKick);             // 1111
   _pShell->DeclareSymbol("user void VoteForBan(INDEX, INDEX);",       &VoteForBan);              // 1111
+  _pShell->DeclareSymbol("user void BanClientTemp(INDEX, INDEX);",    &BanClientTemp);           // 1111
   _pShell->DeclareSymbol("user void CastPlayerVote(INDEX, INDEX);",   &CastPlayerVote);          // 1111
   _pShell->DeclareSymbol("user void PlayerVoteTimeoutCheck(INDEX);",  &PlayerVoteTimeoutCheck);  // 1111
 
@@ -414,7 +416,7 @@ static INDEX ClientToPlayerIndex(INDEX iClient) {    // 1111
     }
     return iPlayer;
 }
-static const CTString& SelectLangMessage(INDEX iClient, const CTString& strEN, const CTString& strRU) {
+const CTString& SelectLangMessage(INDEX iClient, const CTString& strEN, const CTString& strRU) {
     const char* szLang = PlayerDB_GetLanguage(ClientToPlayerIndex(iClient));
     return (strcmp(szLang, "ru") == 0) ? strRU : strEN;
 }
@@ -787,11 +789,11 @@ static void BroadcastPlayerVoteTally(INDEX ctYes, INDEX ctNo) {  // 1111
  
     CTString strTitleEN, strTitleRU;
     if (_bPlayerVoteIsBan) {
-        strTitleEN.PrintF("^c00ff80Vote to ban ^c80ffff%s^c00ff80 for 20 minutes:^r",            _strPlayerVoteName.Undecorated().str_String);
-        strTitleRU.PrintF("^c00ff80Голосование: забанить ^c80ffff%s^c00ff80 на 20 минут:^r",  _strPlayerVoteName.Undecorated().str_String);
+        strTitleEN.PrintF("^c00ff80Vote to ban ^cffda59%s^c00ff80 for 20 minutes:^r",            _strPlayerVoteName.Undecorated().str_String);
+        strTitleRU.PrintF("^c00ff80Голосование: забанить ^cffda59%s^c00ff80 на 20 минут:^r",  _strPlayerVoteName.Undecorated().str_String);
     } else {
-        strTitleEN.PrintF("^c00ff80Vote to kick ^c80ffff%s^c00ff80:^r",            _strPlayerVoteName.Undecorated().str_String);
-        strTitleRU.PrintF("^c00ff80Голосование: кикнуть ^c80ffff%s^c00ff80:^r",   _strPlayerVoteName.Undecorated().str_String);
+        strTitleEN.PrintF("^c00ff80Vote to kick ^cffda59%s^c00ff80:^r",            _strPlayerVoteName.Undecorated().str_String);
+        strTitleRU.PrintF("^c00ff80Голосование: кикнуть ^cffda59%s^c00ff80:^r",   _strPlayerVoteName.Undecorated().str_String);
     }
     BroadcastVoteMessage(strSender, strTitleEN, strTitleRU);
  
@@ -833,27 +835,18 @@ static void TallyPlayerVote() {  // 1111
  
         CTString strMsgEN, strMsgRU;
         if (bBan) {
-            strMsgEN.PrintF("^c00ff80Vote passed: ^c80ffff%s^c00ff80 is banned for %d minutes", strName.Undecorated().str_String, PLAYERVOTE_BAN_MINUTES);
-            strMsgRU.PrintF("^c00ff80Голосование: ^c80ffff%s^c00ff80 забанен на %d минут",      strName.Undecorated().str_String, PLAYERVOTE_BAN_MINUTES);
+            strMsgEN.PrintF("^c00ff80Vote passed: ^cffda59%s^c00ff80 is banned for %d minutes", strName.Undecorated().str_String, PLAYERVOTE_BAN_MINUTES);
+            strMsgRU.PrintF("^c00ff80Голосование: ^cffda59%s^c00ff80 забанен на %d минут",      strName.Undecorated().str_String, PLAYERVOTE_BAN_MINUTES);
         } else {
-            strMsgEN.PrintF("^c00ff80Vote passed: ^c80ffff%s^c00ff80 was kicked", strName.Undecorated().str_String);
-            strMsgRU.PrintF("^c00ff80Голосование: ^c80ffff%s^c00ff80 кикнут",     strName.Undecorated().str_String);
+            strMsgEN.PrintF("^c00ff80Vote passed: ^cffda59%s^c00ff80 was kicked", strName.Undecorated().str_String);
+            strMsgRU.PrintF("^c00ff80Голосование: ^cffda59%s^c00ff80 кикнут",     strName.Undecorated().str_String);
         }
         BroadcastVoteMessage("^cff0000", strMsgEN, strMsgRU);
  
         if (bBan) {
-            //CTString strExec;
-            //strExec.PrintF("BanClient(%d, %d, \"\\n^cff1111BANNED BY VOTE (%d min)\");",
-            //    (int)iTarget, PLAYERVOTE_BAN_MINUTES, PLAYERVOTE_BAN_MINUTES);
-            //_pShell->Execute(strExec);
-			
-			// Placeholder
-			INetwork::SendDisconnectMessage(
-                iTarget,
-                SelectLangMessage(iTarget,
-                    "\n^cff1111BANNED BY VOTE (20 min)^r",
-                    "\n^cff1111ЗАбАНЕН ГОЛОСОВАНИЕМ (20 мин)^r"),
-                FALSE);
+            CTString strExec;
+            strExec.PrintF("BanClientTemp(%d, %d);", (int)iTarget, (int)PLAYERVOTE_BAN_MINUTES);
+            _pShell->Execute(strExec);
         } else {
             INetwork::SendDisconnectMessage(
                 iTarget,
@@ -869,11 +862,11 @@ static void TallyPlayerVote() {  // 1111
     if (ctYes + ctNo >= ctActive) {
         CTString strMsgEN, strMsgRU;
         if (_bPlayerVoteIsBan) {
-            strMsgEN.PrintF("^c00ff80Vote to ban ^c80ffff%s^c00ff80 failed",              _strPlayerVoteName.Undecorated().str_String);
-            strMsgRU.PrintF("^c00ff80Голосование (забанить ^c80ffff%s^c00ff80) не прошло", _strPlayerVoteName.Undecorated().str_String);
+            strMsgEN.PrintF("^c00ff80Vote to ban ^cffda59%s^c00ff80 failed",              _strPlayerVoteName.Undecorated().str_String);
+            strMsgRU.PrintF("^c00ff80Голосование (забанить ^cffda59%s^c00ff80) не прошло", _strPlayerVoteName.Undecorated().str_String);
         } else {
-            strMsgEN.PrintF("^c00ff80Vote to kick ^c80ffff%s^c00ff80 failed",             _strPlayerVoteName.Undecorated().str_String);
-            strMsgRU.PrintF("^c00ff80Голосование (кикнуть ^c80ffff%s^c00ff80) не прошло",  _strPlayerVoteName.Undecorated().str_String);
+            strMsgEN.PrintF("^c00ff80Vote to kick ^cffda59%s^c00ff80 failed",             _strPlayerVoteName.Undecorated().str_String);
+            strMsgRU.PrintF("^c00ff80Голосование (кикнуть ^cffda59%s^c00ff80) не прошло",  _strPlayerVoteName.Undecorated().str_String);
         }
         ResetPlayerVote();
         BroadcastVoteMessage("^cffff", strMsgEN, strMsgRU);
@@ -949,15 +942,15 @@ void ListClients(SHELL_FUNC_ARGS) {
     for (INDEX i = 1; i < ctSessions; i++) {
         if (!srv.srv_assoSessions[i].sso_bActive) continue;
         CTString strLine;
-        strLine.PrintF("^cffff90%d ^c888888- ^c80ffff%s^r", (int)i, GetNameForClient(i).Undecorated().str_String);
+        strLine.PrintF("^cffff90%d ^c888888- ^cffda59%s^r", (int)i, GetNameForClient(i).Undecorated().str_String);
         INetwork::SendChatToClient(iTo, "^ced2675", strLine);
         bAny = TRUE;
     }
  
     if (!bAny) {
         INetwork::SendChatToClient(iTo, "^ced2675", SelectLangMessage(iTo,
-            "^c80ffff(no other active players)^r",
-            "^c80ffff(нет других активных игроков)^r"));
+            "^cffda59(no other active players)^r",
+            "^cffda59(нет других активных игроков)^r"));
         return;
     }
 }
@@ -975,6 +968,43 @@ void VoteForBan(SHELL_FUNC_ARGS) {  // 1111
     INDEX iTarget = NEXT_ARG(INDEX);
     StartPlayerVote(iClient, iTarget, TRUE);
 }
+
+// BanClientTemp(iClient, iBanMinutes) вЂ” 1111
+// Bans a *currently connected* client by live slot. Resolves the slot to its
+// persistent identity (same IP/GUID matching used by the client log) via
+// _aClientIdentities, then reuses CClientRestriction::BanClient so the ban
+// lands in the same list as !ban and ClientLogBan, and every live session
+// under that identity gets disconnected (admins excluded automatically).
+void BanClientTemp(SHELL_FUNC_ARGS) {
+  BEGIN_SHELL_FUNC;
+  INDEX iClient     = NEXT_ARG(INDEX);
+  INDEX iBanMinutes = NEXT_ARG(INDEX);
+
+  if (!_pNetwork->IsServer()) return;
+
+  const INDEX ctSessions = _pNetwork->ga_srvServer.srv_assoSessions.Count();
+
+  if (iClient < 1 || iClient >= ctSessions || !_pNetwork->ga_srvServer.srv_assoSessions[iClient].sso_bActive) {
+    CPutString(TRANS("BanClientTemp: Invalid or inactive client!\n"));
+    return;
+  }
+
+  if (iBanMinutes <= 0) {
+    CPutString(TRANS("BanClientTemp: Ban time must be positive (use ClientLogBan with -1 for a permanent ban).\n"));
+    return;
+  }
+
+  CClientIdentity *pci = _aActiveClients[iClient].pClient;
+  INDEX iIdentity = (pci != NULL) ? _aClientIdentities.GetIndex(pci) : -1;
+
+  if (iIdentity == -1) {
+    CPutString(TRANS("BanClientTemp: Couldn't find client identity in the log!\n"));
+    return;
+  }
+
+  CTString strResult = CClientRestriction::BanClient(iIdentity, (DOUBLE)iBanMinutes * 60.0);
+  CPutString(strResult + "\n");
+};
  
 // CastPlayerVote(iClient, bYes) вЂ” safe to call alongside CastMapVote in the    1111
 // ini; silently no-ops when no player vote is active.
@@ -1003,11 +1033,11 @@ void PlayerVoteTimeoutCheck(SHELL_FUNC_ARGS) {  // 1111
  
     CTString strMsgEN, strMsgRU;
     if (_bPlayerVoteIsBan) {
-        strMsgEN.PrintF("^c00ff80Vote to ban ^c80ffff%s^c00ff80 timed out",           _strPlayerVoteName.Undecorated().str_String);
-        strMsgRU.PrintF("^c00ff80Голосование (забанить ^c80ffff%s^c00ff80) истекло по времени",          _strPlayerVoteName.Undecorated().str_String);
+        strMsgEN.PrintF("^c00ff80Vote to ban ^cffda59%s^c00ff80 timed out",           _strPlayerVoteName.Undecorated().str_String);
+        strMsgRU.PrintF("^c00ff80Голосование (забанить ^cffda59%s^c00ff80) истекло по времени",          _strPlayerVoteName.Undecorated().str_String);
     } else {
-        strMsgEN.PrintF("^c00ff80Vote to kick ^c80ffff%s^c00ff80 timed out",           _strPlayerVoteName.Undecorated().str_String);
-        strMsgRU.PrintF("^c00ff80Голосование (кикнуть ^c80ffff%s^c00ff80) истекло по времени",           _strPlayerVoteName.Undecorated().str_String);
+        strMsgEN.PrintF("^c00ff80Vote to kick ^cffda59%s^c00ff80 timed out",           _strPlayerVoteName.Undecorated().str_String);
+        strMsgRU.PrintF("^c00ff80Голосование (кикнуть ^cffda59%s^c00ff80) истекло по времени",           _strPlayerVoteName.Undecorated().str_String);
     }
     ResetPlayerVote();
     BroadcastVoteMessage("^cffff", strMsgEN, strMsgRU);

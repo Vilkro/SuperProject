@@ -36,6 +36,7 @@ static INDEX    cmd_iChatClient = -1;
 static CTString cmd_cmdOnChat = "";
 static CTString cmd_strChatMessage = "";
 static CTString cmd_strSilentChatCommands = "";  // ';'-separated exact matches that never get broadcast
+static CTString cmd_strPMCmd = "@pm";   //  1111 configurable PM command trigger
 
 // Extra strings    1111
 static CTString cmd_strFirstExtra = "";
@@ -106,6 +107,7 @@ void IProcessPacket::RegisterCommands(void) {
   _pShell->DeclareSymbol("persistent user CTString cmd_cmdOnChat;", &cmd_cmdOnChat);
   _pShell->DeclareSymbol("user CTString cmd_strChatMessage;", &cmd_strChatMessage);
   _pShell->DeclareSymbol("persistent user CTString cmd_strSilentChatCommands;", &cmd_strSilentChatCommands);
+  _pShell->DeclareSymbol("persistent user CTString cmd_strPMCmd;", &cmd_strPMCmd);
 
   // Extra strings    1111
   _pShell->DeclareSymbol("user CTString cmd_strFirstExtra;", &cmd_strFirstExtra);
@@ -320,7 +322,7 @@ void IProcessPacket::OnConnectRemoteSessionStateRequest(INDEX iClient, CNetworkM
     CTString strTime, strReason;
     cr.PrintBanTime(strTime);
 
-    strReason.PrintF(TRANS("\n^cff1111YOU HAVE BEEN BANNED FOR %s!^r"), strTime);
+    strReason.PrintF(TRANS("\n^cff1111YOU ARE BANNED! ^c00ff80%s left^r"), strTime);
     INetwork::SendDisconnectMessage(iClient, strReason, TRUE);
     return;
   }
@@ -550,7 +552,7 @@ void IProcessPacket::OnPlayerConnectRequest(INDEX iClient, CNetworkMessage &nmMe
       return;
     }
 
-    // ── 1111: check SQLite bans table ─────────────────────────────────────
+    // â”€â”€ 1111: check SQLite bans table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     {
         char szBanGUID[33];
         PlayerDB_FormatGUID(pcCharacter.pc_aubGUID, szBanGUID);
@@ -569,7 +571,7 @@ void IProcessPacket::OnPlayerConnectRequest(INDEX iClient, CNetworkMessage &nmMe
             return;
         }
     }
-    // ── end 1111 ──────────────────────────────────────────────────────────
+    // â”€â”€ end 1111 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   }
 
   CServer &srv = _pNetwork->ga_srvServer;
@@ -1025,6 +1027,218 @@ static BOOL IsSilentChatCommand(const CTString& strMsg) {
     return FALSE;
 }
 
+/* ---- ResolveClientSlot ------------------------------------------------- *
+ * Accepts a pure-decimal session slot index (from @list) OR a partial,      *
+ * case-insensitive, decoration-stripped player name fragment.                *
+ * Sends bilingual error feedback to iRequester automatically.                *
+ * Returns slot >= 1 on success, -1 on failure.                               *
+ * ----------------------------------------------------------------------- */
+ static void SendClientInfo(INDEX iClient, const CTString &strEN, const CTString &strRU) {  /* 1111 */
+    INetwork::SendChatToClient(iClient, "^CServer", " ");
+    INetwork::SendChatToClient(iClient, "^ced2675", SelectLangMessage(iClient, strEN, strRU));
+}
+
+static INDEX ResolveClientSlot(const CTString& strArg, INDEX iRequester) {  /* 1111 */
+    if (!_pNetwork->IsServer()) return -1;
+    CServer& srv = _pNetwork->ga_srvServer;
+
+    // Declare loop variables at the top to avoid MSVC for-scope leaking
+    INDEX iSearchSlot, ipl;
+    char* pLower;
+
+    // Numeric: only if every character is a digit
+    BOOL bAllDigits = (strArg.str_String[0] != '\0');
+    {
+        const char* p = strArg.str_String;
+        while (*p) {
+            if (*p < '0' || *p > '9') { bAllDigits = FALSE; break; }
+            p++;
+        }
+    }
+
+    if (bAllDigits) {
+        INDEX iSlot = -1;
+        sscanf(strArg.str_String, "%d", &iSlot);   // sscanf: no const issue
+        if (iSlot >= 1 && iSlot < (INDEX)srv.srv_assoSessions.Count()
+            && srv.srv_assoSessions[iSlot].sso_bActive) {
+            return iSlot;
+        }
+        SendClientInfo(iRequester,
+			"^c00ff80Slot not found - use ^cefefef@list^c00ff80 for active players",
+			"^c00ff80���� �� ������ - ����������� ^cefefef@list");
+        return -1;
+    }
+
+    // Name search: lowercase the query 
+    char szQuery[256];
+    memset(szQuery, 0, sizeof(szQuery));
+    strncpy(szQuery, strArg.str_String, sizeof(szQuery) - 1);
+    for (pLower = szQuery; *pLower; pLower++) *pLower = (char)tolower((UBYTE)*pLower);
+
+    INDEX iFound = -1;
+    INDEX ctFound = 0;
+
+    for (iSearchSlot = 1; iSearchSlot < (INDEX)srv.srv_assoSessions.Count(); iSearchSlot++) {
+        if (!srv.srv_assoSessions[iSearchSlot].sso_bActive) continue;
+
+        CTString strName = "";
+        for (ipl = 0; ipl < (INDEX)srv.srv_aplbPlayers.Count(); ipl++) {
+            CPlayerBuffer& plb = srv.srv_aplbPlayers[ipl];
+            if (!plb.IsActive() || plb.plb_iClient != iSearchSlot) continue;
+            strName = plb.plb_pcCharacter.GetName().Undecorated();
+            break;
+        }
+        if (strName == "") continue;
+
+        char szName[256];
+        memset(szName, 0, sizeof(szName));
+        strncpy(szName, strName.str_String, sizeof(szName) - 1);
+        for (pLower = szName; *pLower; pLower++) *pLower = (char)tolower((UBYTE)*pLower);
+
+        if (strstr(szName, szQuery) != NULL) {
+            iFound = iSearchSlot;
+            ctFound++;
+        }
+    }
+
+    if (ctFound == 1) return iFound;
+
+    if (ctFound == 0) {
+        SendClientInfo(iRequester,
+			"^c00ff80No player matches - try ^cefefef@list",
+			"^c00ff80����� �� ������ - ���������� ^cefefef@list");
+        return -1;
+    }
+
+    // ambiguous — header first, then one line per matching slot  /* 1111 */
+    INetwork::SendChatToClient(iRequester, "^CServer", " ");
+    INetwork::SendChatToClient(iRequester, "^ced2675",
+        SelectLangMessage(iRequester,
+            "^c00ff80Multiple matches - be more specific:",
+            "^c00ff80��������� ���������� - �������� ���:"));
+
+    for (iSearchSlot = 1; iSearchSlot < (INDEX)srv.srv_assoSessions.Count(); iSearchSlot++) {
+        if (!srv.srv_assoSessions[iSearchSlot].sso_bActive) continue;
+        CTString strName = "";
+        for (ipl = 0; ipl < (INDEX)srv.srv_aplbPlayers.Count(); ipl++) {
+            CPlayerBuffer &plb = srv.srv_aplbPlayers[ipl];
+            if (!plb.IsActive() || plb.plb_iClient != iSearchSlot) continue;
+            strName = plb.plb_pcCharacter.GetName().Undecorated();
+            break;
+        }
+        char szName[256];
+        memset(szName, 0, sizeof(szName));
+        strncpy(szName, strName.str_String, sizeof(szName) - 1);
+        for (pLower = szName; *pLower; pLower++) *pLower = (char)tolower((UBYTE)*pLower);
+        if (strstr(szName, szQuery) == NULL) continue;
+
+        CTString strLine;
+        strLine.PrintF("^cffff90%d ^c888888- ^cffda59%s", (int)iSearchSlot, strName.str_String);
+        INetwork::SendChatToClient(iRequester, "^ced2675", strLine);
+    }
+    return -1;
+}
+
+/* ---- HandlePMCommand --------------------------------------------------- *
+ * Handles the @pm <client> <message> private message command.               *
+ * Both sender and recipient receive the same packet; the original chat      *
+ * message is suppressed (returns FALSE). Never reaches the broadcast path. *
+ * ----------------------------------------------------------------------- */
+static BOOL HandlePMCommand(INDEX iClient, const CTString& strMessage) {  /* 1111 */
+    CTString      strArgs;
+    CTString      strTargetArg;
+    CTString      strPMText;
+    CTString      strSenderName;
+    CTString      strFromField;
+    CTString      strMsgField;
+    const char* pSplit;
+    char          szTarget[256];
+    INDEX         iTargetLen;
+    INDEX         iTarget;
+    INDEX         ipl;
+
+    strArgs = strMessage;
+    strArgs.RemovePrefix(cmd_strPMCmd);
+    strArgs.TrimSpacesLeft();
+
+    pSplit = strArgs.str_String;
+    while (*pSplit && *pSplit != ' ') pSplit++;
+
+    if (strArgs == "" || *pSplit == '\0') {
+        SendClientInfo(iClient,
+			"^c00ff80Usage: ^cefefef@pm <name or slot#> <message>",
+			"^c00ff80�������������: ^cefefef@pm <��� ��� ����> <���������>");
+		return FALSE;
+    }
+
+    memset(szTarget, 0, sizeof(szTarget));
+    iTargetLen = (INDEX)(pSplit - strArgs.str_String);
+    if (iTargetLen > 255) iTargetLen = 255;
+    memcpy(szTarget, strArgs.str_String, iTargetLen);
+    strTargetArg = szTarget;
+
+    while (*pSplit == ' ') pSplit++;
+    if (*pSplit == '\0') {
+        SendClientInfo(iClient,
+			"^c00ff80No message provided",
+			"^c00ff80��������� �� �������");
+        return FALSE;
+    }
+    strPMText = pSplit;
+
+    iTarget = ResolveClientSlot(strTargetArg, iClient);
+    if (iTarget < 0) return FALSE;
+
+    strSenderName = "Server";
+    CServer& srv = _pNetwork->ga_srvServer;
+    for (ipl = 0; ipl < (INDEX)srv.srv_aplbPlayers.Count(); ipl++) {
+        CPlayerBuffer& plb = srv.srv_aplbPlayers[ipl];
+        if (!plb.IsActive() || plb.plb_iClient != iClient) continue;
+        strSenderName = ColorizeNick_Impl(plb.plb_pcCharacter.GetName());
+        break;
+    }
+
+    // Recipient and sender may have different languages, so build tag per-slot
+    CTString strFromRecipient = SelectLangMessage(iTarget,
+        "[private message] ", "[������ ���������] ")
+        + strSenderName;
+    CTString strFromSender = SelectLangMessage(iClient,
+        "[private message] ", "[������ ���������] ")
+        + strSenderName;
+
+    INetwork::SendChatToClient(iTarget, strFromRecipient, strPMText);
+    INetwork::SendChatToClient(iClient, strFromSender,    strPMText);
+    return FALSE;
+}
+
+static BOOL HandleKickCommand(INDEX iClient, const CTString& strMessage) {  /* 1111 */
+    CTString strArg = strMessage;
+    strArg.RemovePrefix("@kick");
+    strArg.TrimSpacesLeft();
+
+    INDEX iTarget = ResolveClientSlot(strArg, iClient);
+    if (iTarget < 0) return FALSE;
+
+    CTString strExec;
+    strExec.PrintF("VoteForKick(%d, %d);", (int)iClient, (int)iTarget);
+    _pShell->Execute(strExec);
+    return FALSE;
+}
+
+static BOOL HandleBanCommand(INDEX iClient, const CTString& strMessage) {  /* 1111 */
+    CTString strArg = strMessage;
+    strArg.RemovePrefix("@ban");
+    strArg.TrimSpacesLeft();
+
+    INDEX iTarget = ResolveClientSlot(strArg, iClient);
+    if (iTarget < 0) return FALSE;
+
+    CTString strExec;
+    strExec.PrintF("VoteForBan(%d, %d);", (int)iClient, (int)iTarget);
+    _pShell->Execute(strExec);
+    return FALSE;
+}
+
 // Client sending a chat message
 BOOL IProcessPacket::OnChatInRequest(INDEX iClient, CNetworkMessage &nmMessage)
 {
@@ -1051,7 +1265,13 @@ BOOL IProcessPacket::OnChatInRequest(INDEX iClient, CNetworkMessage &nmMessage)
 
   // Handle chat command if the message starts with a command prefix
   if (strMessage.HasPrefix(ser_strCommandPrefix)) {
-    return HandleChatCommand(iClient, strMessage);
+      // Intercept @pm before the generic command router    1111
+      CTString strCheck = strMessage;
+      strCheck.RemovePrefix(ser_strCommandPrefix);
+      if (strCheck.HasPrefix("pm ") || strCheck == "pm") {
+          return HandlePMCommand(iClient, strMessage);
+      }
+      return HandleChatCommand(iClient, strMessage);    
   }
 
   // ==== Hijack chat routing ====  1111
@@ -1088,6 +1308,14 @@ BOOL IProcessPacket::OnChatInRequest(INDEX iClient, CNetworkMessage &nmMessage)
   if (ulFrom == 0) {
       ulTo = -1; // Public message
   }
+
+  // ── PM / kick / ban — must intercept before nmOut is built  	1111
+  if (cmd_strPMCmd != "" &&
+      (strMessage.HasPrefix(cmd_strPMCmd + " ") || strMessage == cmd_strPMCmd)) {
+      return HandlePMCommand(iClient, strMessage);
+  }
+  if (strMessage.HasPrefix("@kick ")) { return HandleKickCommand(iClient, strMessage); }
+  if (strMessage.HasPrefix("@ban "))  { return HandleBanCommand (iClient, strMessage); }
 
   // Resolve and colorize sender name for player chat   1111
   CTString strColorizedSender = "";
