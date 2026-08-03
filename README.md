@@ -22,7 +22,7 @@ All changes are marked `// 1111` in the source for easy diffing against upstream
 **For the full write-up of what's added and why, and the server configs/dashboard that use it,
 see [Vilkro/ServerUpgrade](https://github.com/Vilkro/ServerUpgrade).**
 
-Built on top of, and would not exist without, DreamyCecil's Classics Patch — see the original
+Built on top of, and would not exist without, DreamyCecil's Classics Patch - see the original
 `README.md` below for the full upstream feature set, project layout, and build instructions.
 
 ## Project structure
