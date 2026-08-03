@@ -23,6 +23,7 @@ INDEX ded_bRestartWhenEmpty = TRUE;
 FLOAT ded_tmTimeout = -1;
 
 INDEX ded_bRestartWhenPaused = 0;   // 1111
+INDEX ded_bFirstRoundOnRestart = 0;     //  1111
 FLOAT ded_tmRestartWhenEmptyDelay = 0;   // 1111
 
 // #define MAX_ROUNDS 64
@@ -152,6 +153,7 @@ BOOL Init(int argc, char *argv[])
   _pShell->DeclareSymbol("user void NextMap(void);", &NextMap);
 
   _pShell->DeclareSymbol("user INDEX ded_bRestartWhenPaused;", &ded_bRestartWhenPaused);   // 1111
+  _pShell->DeclareSymbol("user INDEX ded_bFirstRoundOnRestart;", &ded_bFirstRoundOnRestart);   // 1111
   _pShell->DeclareSymbol("user FLOAT ded_tmRestartWhenEmptyDelay;", &ded_tmRestartWhenEmptyDelay);   // 1111
 
   _pShell->DeclareSymbol("user INDEX ded_iTargetRound;", &ded_iTargetRound);   // 1111
@@ -259,6 +261,9 @@ int SubMain(int argc, char *argv[])
         RoundEnd(FALSE);
 
         CPutString(LOCALIZE("\nNOTE: Restarting server!\n\n"));
+        if (ded_bFirstRoundOnRestart) {
+            _iRound = 1;
+        }
         RoundBegin();
 
         // [Cecil] Restore current round after changing levels

@@ -31,6 +31,16 @@ class IServerSandbox {
     // Delete an entity from the world
     static void DeleteEntity(SHELL_FUNC_ARGS);
 
+    static void DeleteGameplayEntities(void);   //  1111
+    static void ListWorldEntities(void);    //  1111
+    static void EnableMoverDamageActivation(void);    //  1111
+    static void EnableTouchActivation(void);    //  1111
+    static void CacheWorldBase(void);   //  1111
+    static void EnableTriggerAutoStart(void);    //  1111
+    static void DeleteCoopMarkers(void);    //  1111
+    static void MakeCoopMarkersReusable(void);    //  1111
+    static void CapBrushHealth(void);    //  1111
+
     // Initialize/reinitialize an entity
     static void InitEntity(SHELL_FUNC_ARGS);
 
@@ -42,6 +52,8 @@ class IServerSandbox {
 
     // Set new value to some property by its name of an entity
     static void SetEntityProperty(SHELL_FUNC_ARGS);
+
+    static void GetEntityProperty(SHELL_FUNC_ARGS); //  1111
 
     // Parent an entity to another entity
     static void ParentEntity(SHELL_FUNC_ARGS);

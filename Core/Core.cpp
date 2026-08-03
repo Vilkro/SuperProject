@@ -19,6 +19,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "Base/GlobalScreenshots.h"
 #include "Networking/NetworkFunctions.h"
 
+#include <Core/Query/PlayerDB.h>    // 1111
+#include <Core/Query/GeoIP.h>       // 1111
+#include <Core/Query/DemoManager.h>    //  1111
+#include <Tracking/Tracking.h>    //  1111
+
 static CTimerValue _tvClassicsPatchInit = __int64(0); // When Classics Patch was initialized
 
 static bool _bClassicsPatchRunning = false;
@@ -253,6 +258,13 @@ void ClassicsPatch_Init(void)
 
     // Load core plugins
     GetPluginAPI()->LoadPlugins(k_EPluginFlagEngine);
+
+    // RocketJumpTracker    1111
+    _pShell->DeclareSymbol("persistent user INDEX rjt_bEnable;", &rjt_bEnable);
+    _pShell->DeclareSymbol("persistent user CTString rjt_strDBPath;", &rjt_strDBPath);
+    _pShell->DeclareSymbol("persistent user INDEX rjt_bAnnounceInChat;", &rjt_bAnnounceInChat);
+    _pShell->DeclareSymbol("persistent user FLOAT rjt_fMinHeightDiff;", &rjt_fMinHeightDiff);
+    RJT_Init();
   }
 
   // Create timer handler for constant functionatily
@@ -266,6 +278,11 @@ void ClassicsPatch_Shutdown(void)
   ASSERT(_bClassicsPatchRunning);
   if (!_bClassicsPatchRunning) return;
   _bClassicsPatchRunning = false;
+
+  PlayerDB_Shutdown();      //  1111
+  GeoIP_Shutdown();         // 1111
+  DemoManager_Shutdown();   // 1111 
+  RJT_Shutdown();   //  1111
 
   // Clean up the patches
   _EnginePatches.Cleanup();

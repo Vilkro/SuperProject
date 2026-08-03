@@ -404,6 +404,7 @@ extern INDEX plr_bRenderPicked = FALSE;
 extern INDEX plr_bRenderPickedParticles = FALSE;
 extern INDEX plr_bOnlySam = FALSE;
 extern INDEX ent_bReportBrokenChains = FALSE;
+extern INDEX ent_bAnnounceCoopMarkers = FALSE;  //  1111
 extern FLOAT ent_tmMentalIn   = 0.5f;
 extern FLOAT ent_tmMentalOut  = 0.75f;
 extern FLOAT ent_tmMentalFade = 0.5f;
@@ -836,6 +837,7 @@ void CPlayer_OnInitClass(void)
   _pShell->DeclareSymbol("persistent user INDEX plr_bRenderPickedParticles;", &plr_bRenderPickedParticles);
   _pShell->DeclareSymbol("persistent user INDEX plr_bOnlySam;", &plr_bOnlySam);
   _pShell->DeclareSymbol("persistent user INDEX ent_bReportBrokenChains;", &ent_bReportBrokenChains);
+  _pShell->DeclareSymbol("persistent user INDEX ent_bAnnounceCoopMarkers;", &ent_bAnnounceCoopMarkers); //  1111
   _pShell->DeclareSymbol("persistent user FLOAT ent_tmMentalIn  ;", &ent_tmMentalIn  );
   _pShell->DeclareSymbol("persistent user FLOAT ent_tmMentalOut ;", &ent_tmMentalOut );
   _pShell->DeclareSymbol("persistent user FLOAT ent_tmMentalFade;", &ent_tmMentalFade);

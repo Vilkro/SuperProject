@@ -68,6 +68,12 @@ void IServerSandbox::DeleteEntity(SHELL_FUNC_ARGS) {
     return;
   }
 
+  // NEW: sentinel ID triggers bulk removal of gameplay entities instead of a single delete     1111
+  if (iEntityID == 999999) {
+      DeleteGameplayEntities();
+      return;
+  }
+
   CEntity *pen = IWorld::FindEntityByID(IWorld::GetWorld(), (ULONG)iEntityID);
 
   // No entity
@@ -79,6 +85,354 @@ void IServerSandbox::DeleteEntity(SHELL_FUNC_ARGS) {
   CPrintF(TRANS("Destroyed '%s' entity under ID: %d\n"), pen->GetName(), iEntityID);
   pen->Destroy();
 };
+
+
+// ---------------------------------------------------------------------------------------  1111
+// List every entity in the world with its class name - READ ONLY, deletes nothing     1111
+void IServerSandbox::ListWorldEntities(void) {
+    CWorld* pwo = IWorld::GetWorld();
+
+    if (pwo == NULL) {
+        CPutString(TRANS("No world loaded\n"));
+        return;
+    }
+
+    INDEX ctTotal = 0;
+
+    FOREACHINDYNAMICCONTAINER(pwo->wo_cenEntities, CEntity, iten) {
+        CEntity* pen = &*iten;
+        const CTString& strClass = pen->GetClass()->ec_pdecDLLClass->dec_strName;
+
+        CPrintF("[%s] %s\n", strClass, pen->GetName());
+        ctTotal++;
+    }
+
+    CPrintF(TRANS("Total entities: %d\n"), ctTotal);
+};
+
+// Class names to delete in bulk mode - fill in from sutl_ListWorldEntities() output     1111
+static BOOL IsClassToDelete(const CTString& strClass) {
+    static const char* astrTargets[] = {
+      "Enemy Spawner",  // stops every species from ever spawning, on any map
+      "World link",     // level transition - same class name on every stock map
+      // "Trigger",
+
+      // Monster template/species classes - confirmed present in your dump
+      "Scorpman", "Fish", "BigHead", "Grunt", "ChainsawFreak", "Boneman",
+      "Eyeman", "Headman", "Werebull", "Woman", "Gizmo", "Elemental",
+      "Guffy", "Walker", "Beast", "Devil", "CannonRotating", "Demon",
+      "CannonStatic", "ExotechLarva", "AirElemental", "Summoner",
+
+      // On-screen trigger messages
+      // "MessageHolder",
+    };
+
+    for (INDEX i = 0; i < ARRAYCOUNT(astrTargets); i++) {
+        if (strClass == astrTargets[i]) return TRUE;
+    }
+    return FALSE;
+};
+
+// NEW: sentinel ID triggers bulk removal of gameplay entities instead of a single delete     1111
+void IServerSandbox::DeleteGameplayEntities(void) {
+    CWorld* pwo = IWorld::GetWorld();
+    if (pwo == NULL) {
+        CPutString(TRANS("No world loaded\n"));
+        return;
+    }
+
+    INDEX iOff = 0;
+
+    CDynamicContainer<CEntity> cToDelete;
+
+    FOREACHINDYNAMICCONTAINER(pwo->wo_cenEntities, CEntity, iten) {
+        CEntity* pen = &*iten;
+        const CTString& strClass = pen->GetClass()->ec_pdecDLLClass->dec_strName;
+
+        /*if (strClass == "Trigger" && pen->GetName() != "Trigger Coop marker") {
+            cToDelete.Add(pen);
+            continue;
+        }*/
+
+        if (IsClassToDelete(strClass)) {
+            cToDelete.Add(pen);
+        }
+    }
+
+    INDEX ctDeleted = cToDelete.Count();
+
+    FOREACHINDYNAMICCONTAINER(cToDelete, CEntity, itenDel) {
+        // CPrintF("Deleting '%s' [%s]\n", itenDel->GetName(),
+        //     itenDel->GetClass()->ec_pdecDLLClass->dec_strName);
+        itenDel->Destroy();
+    }
+
+    CPrintF(TRANS("Deleted %d entities\n"), ctDeleted);
+};
+
+void IServerSandbox::CapBrushHealth(void) {
+    CWorld* pwo = IWorld::GetWorld();
+    if (pwo == NULL) {
+        CPutString(TRANS("No world loaded\n"));
+        return;
+    }
+
+    INDEX iOff = 0;
+
+    FOREACHINDYNAMICCONTAINER(pwo->wo_cenEntities, CEntity, iten) {
+        CEntity* pen = &*iten;
+        const CTString& strClass = pen->GetClass()->ec_pdecDLLClass->dec_strName;
+
+        if (strClass == "Moving Brush") {
+            CLiveEntity* penLive = (CLiveEntity*)pen; // valid: CMovingBrush derives from CLiveEntity
+
+            if (penLive->GetHealth() > 150.0f) {
+                penLive->SetHealth(150.0f);   // actually rewrites en_fHealth, used by ReceiveDamage
+            }
+
+            CEntityProperty* pep = pen->PropertyForName("Blowup by Damager");
+
+            if (pep == NULL) {
+                CPrintF(TRANS("Could not find 'Blowup by Damager' property on '%s'\n"), pen->GetName());
+                continue;
+            }
+
+            IProperties::SetPropValue(pen, pep, &iOff);
+
+            CEntityProperty* pepTarget = pen->PropertyForName("Health");
+            if (pepTarget == NULL) {
+                CPrintF(TRANS("Could not find 'Health' property on '%s'\n"), pen->GetName());
+                continue;
+            }
+
+            void* pTargetValue = NULL;
+            IProperties::GetPropValue(pen, pepTarget, &pTargetValue);
+            if (pTargetValue == NULL) {
+                continue;
+            }
+
+            FLOAT fCurrentHP = *(FLOAT*)pTargetValue;
+            if (fCurrentHP < 150.0f) {
+                continue;
+            }
+
+            FLOAT fCapHP = 150.0f;
+            IProperties::SetPropValue(pen, pepTarget, &fCapHP);
+        }
+    }
+
+    //// Schedule the command before the game starts
+    //if (!_pNetwork->IsServer()) {
+    //    CTString strCommand;
+    //    strCommand.PrintF("sutl_CapBrushHealth();");
+
+    //    ScheduleCommand(strCommand);
+    //    return;
+    //}
+};
+
+// Enable shoot-to-activate on every Moving Brush in the world  1111
+void IServerSandbox::EnableMoverDamageActivation(void) {
+    CWorld* pwo = IWorld::GetWorld();
+
+    if (pwo == NULL) {
+        CPutString(TRANS("No world loaded\n"));
+        return;
+    }
+
+    INDEX ctChanged = 0;
+    INDEX iOn = 1;
+
+    FOREACHINDYNAMICCONTAINER(pwo->wo_cenEntities, CEntity, iten) {
+        CEntity* pen = &*iten;
+        const CTString& strClass = pen->GetClass()->ec_pdecDLLClass->dec_strName;
+
+        if (strClass != "Moving Brush") continue;
+
+        // Skip brushes with no Target - those are destructibles, not doors
+        CEntityProperty* pepTarget = pen->PropertyForName("Target");
+        if (pepTarget != NULL) {
+            void* pTargetValue = NULL;
+            IProperties::GetPropValue(pen, pepTarget, &pTargetValue);
+
+            if (pTargetValue == NULL || *(CEntity**)pTargetValue == NULL) {
+                continue;  // no target, skip
+            }
+        }
+
+        CEntityProperty* pep = pen->PropertyForName("Move on damage");
+
+        if (pep == NULL) {
+            CPrintF(TRANS("Could not find 'Move on damage' property on '%s'\n"), pen->GetName());
+            continue;
+        }
+
+        if (IProperties::SetPropValue(pen, pep, &iOn)) {
+            ctChanged++;
+        }
+    }
+
+    CPrintF(TRANS("Enabled shoot-to-activate on %d moving brushes with targets\n"), ctChanged);
+};
+
+// Enable touch-to-activate on every Moving Brush in the world  1111
+void IServerSandbox::EnableTouchActivation(void) {
+    CWorld* pwo = IWorld::GetWorld();
+
+    if (pwo == NULL) {
+        CPutString(TRANS("No world loaded\n"));
+        return;
+    }
+
+    INDEX ctChanged = 0;
+    INDEX iOn = 1;
+
+    FOREACHINDYNAMICCONTAINER(pwo->wo_cenEntities, CEntity, iten) {
+        CEntity* pen = &*iten;
+        const CTString& strClass = pen->GetClass()->ec_pdecDLLClass->dec_strName;
+
+        if (strClass != "Moving Brush") continue;
+
+        // Skip brushes with no Target - those are destructibles, not doors
+        CEntityProperty* pepTarget = pen->PropertyForName("Target");
+        if (pepTarget != NULL) {
+            void* pTargetValue = NULL;
+            IProperties::GetPropValue(pen, pepTarget, &pTargetValue);
+
+            if (pTargetValue == NULL || *(CEntity**)pTargetValue == NULL) {
+                continue;  // no target, skip
+            }
+        }
+
+        CEntityProperty* pep = pen->PropertyForName("Move on touch");
+
+        if (pep == NULL) {
+            CPrintF(TRANS("Could not find 'Move on touch' property on '%s'\n"), pen->GetName());
+            continue;
+        }
+
+        if (IProperties::SetPropValue(pen, pep, &iOn)) {
+            ctChanged++;
+        }
+    }
+
+    CPrintF(TRANS("Enabled touch-to-activate on %d moving brushes with targets\n"), ctChanged);
+};
+
+void IServerSandbox::CacheWorldBase(void) {
+    CWorld* pwo = IWorld::GetWorld();
+
+    if (pwo == NULL) {
+        CPutString(TRANS("No world loaded\n"));
+        return;
+    }
+
+    CDynamicContainer<CEntity> cWorldBaseCache;
+
+    FOREACHINDYNAMICCONTAINER(pwo->wo_cenEntities, CEntity, iten) {
+        CEntity* pen = &*iten;
+        const CTString& strClass = pen->GetClass()->ec_pdecDLLClass->dec_strName;
+        if (strClass == "WorldBase") {
+            cWorldBaseCache.Add(pen);
+        }
+    }
+
+    CPrintF(TRANS("Cached %d WorldBase entities\n"), cWorldBaseCache.Count());
+};
+
+// Enable Auto Start on every Trigger entity in the world
+void IServerSandbox::EnableTriggerAutoStart(void) {
+    CWorld* pwo = IWorld::GetWorld();
+
+    if (pwo == NULL) {
+        CPutString(TRANS("No world loaded\n"));
+        return;
+    }
+
+    INDEX ctChanged = 0;
+    INDEX iOn = 1;
+
+    FOREACHINDYNAMICCONTAINER(pwo->wo_cenEntities, CEntity, iten) {
+        CEntity* pen = &*iten;
+        const CTString& strClass = pen->GetClass()->ec_pdecDLLClass->dec_strName;
+
+        if (strClass != "Moving Brush") continue;
+
+        CEntityProperty* pep = pen->PropertyForName("Auto start");
+
+        if (pep == NULL) {
+            CPrintF(TRANS("Could not find 'Auto start' property on '%s'\n"), pen->GetName());
+            continue;
+        }
+
+        if (IProperties::SetPropValue(pen, pep, &iOn)) {
+            ctChanged++;
+        }
+    }
+
+    CPrintF(TRANS("Enabled Auto Start on %d triggers\n"), ctChanged);
+};
+
+void IServerSandbox::DeleteCoopMarkers(void) {
+    CWorld* pwo = IWorld::GetWorld();
+
+    if (pwo == NULL) {
+        CPutString(TRANS("No world loaded\n"));
+        return;
+    }
+
+    CDynamicContainer<CEntity> cToDelete;
+
+    FOREACHINDYNAMICCONTAINER(pwo->wo_cenEntities, CEntity, iten) {
+        CEntity* pen = &*iten;
+        const CTString& strClass = pen->GetClass()->ec_pdecDLLClass->dec_strName;
+
+        if (strClass == "Trigger" && pen->GetName() == "Trigger Coop marker") {
+            cToDelete.Add(pen);
+        }
+    }
+
+    INDEX ctDeleted = cToDelete.Count();
+
+    FOREACHINDYNAMICCONTAINER(cToDelete, CEntity, itenDel) {
+        itenDel->Destroy();
+    }
+
+    CPrintF(TRANS("Deleted %d coop marker triggers\n"), ctDeleted);
+};
+
+void IServerSandbox::MakeCoopMarkersReusable(void) {
+    CWorld* pwo = IWorld::GetWorld();
+
+    if (pwo == NULL) {
+        CPutString(TRANS("No world loaded\n"));
+        return;
+    }
+
+    INDEX ctChanged = 0;
+    CTString strMessage = "^f4^c1FFFB7The respawn point has been updated^r";
+    INDEX iMaxTrigs = 9999;
+
+    ScheduleCommand("ent_bAnnounceCoopMarkers = 1;");
+
+    FOREACHINDYNAMICCONTAINER(pwo->wo_cenEntities, CEntity, iten) {
+        CEntity* pen = &*iten;
+        const CTString& strClass = pen->GetClass()->ec_pdecDLLClass->dec_strName;
+
+        if (strClass != "Trigger" || pen->GetName() != "Trigger Coop marker" && pen->GetName() != "Coop Marker Trigger") continue;
+
+        CEntityProperty* pepMsg = pen->PropertyForName("Message");
+        CEntityProperty* pepMax = pen->PropertyForName("Max trigs");
+
+        BOOL bMsgOk = (pepMsg != NULL) ? IProperties::SetPropValue(pen, pepMsg, &strMessage) : FALSE;
+        BOOL bMaxOk = (pepMax != NULL) ? IProperties::SetPropValue(pen, pepMax, &iMaxTrigs) : FALSE;
+
+        if (bMsgOk && bMaxOk) ctChanged++;
+    }
+
+    CPrintF(TRANS("Made %d coop markers reusable\n"), ctChanged);
+};
+// ---------------------------------------------------------------------------------------
 
 // Initialize/reinitialize an entity
 void IServerSandbox::InitEntity(SHELL_FUNC_ARGS) {
@@ -273,8 +627,72 @@ void IServerSandbox::SetEntityProperty(SHELL_FUNC_ARGS) {
 
   // Couldn't set new value
   if (!bPropertySet) {
-    CPrintF(TRANS("Could not set '%s' value to '%s' property\n"), strValue, strProperty);
+      CPrintF(TRANS("Could not set '%s' value to '%s' property\n"), strValue, strProperty);
   }
+  else {
+      CPrintF(TRANS("Set '%s' property to '%s' on '%s' (ID %d)\n"), strProperty, strValue, pen->GetName(), iEntityID);
+  }
+};
+
+// Read the current value of a property by name from an entity
+void IServerSandbox::GetEntityProperty(SHELL_FUNC_ARGS) {
+    BEGIN_SHELL_FUNC;
+    INDEX iEntityID = NEXT_ARG(INDEX);
+    const CTString& strProperty = *NEXT_ARG(CTString*);
+
+    if (iEntityID < 0) {
+        CPrintF(TRANS("Invalid entity ID: %d\n"), iEntityID);
+        return;
+    }
+
+    if (!_pNetwork->IsServer()) {
+        CPrintF(TRANS("Server hasn't started yet, no world loaded\n"));
+        return;
+    }
+
+    CEntity* pen = IWorld::FindEntityByID(IWorld::GetWorld(), (ULONG)iEntityID);
+
+    if (pen == NULL) {
+        CPrintF(TRANS("Could not find entity under ID: %d\n"), iEntityID);
+        return;
+    }
+
+    CEntityProperty* pep = pen->PropertyForName(strProperty);
+
+    if (pep == NULL) {
+        CPrintF(TRANS("Could not find entity property with the name '%s' in %s\n"), strProperty, pen->GetClass()->ec_pdecDLLClass->dec_strName);
+        return;
+    }
+
+    void* pValue = NULL;
+    IProperties::GetPropValue(pen, pep, &pValue);
+
+    INDEX iPropType = IProperties::ConvertType(pep->ep_eptType);
+
+    switch (iPropType)
+    {
+    case CEntityProperty::EPT_INDEX:
+        CPrintF("%s = %d\n", strProperty, *(INDEX*)pValue);
+        break;
+
+    case CEntityProperty::EPT_FLOAT:
+        CPrintF("%s = %g\n", strProperty, *(FLOAT*)pValue);
+        break;
+
+    case CEntityProperty::EPT_STRING:
+        CPrintF("%s = \"%s\"\n", strProperty, *(CTString*)pValue);
+        break;
+
+    case CEntityProperty::EPT_ENTITYPTR: {
+        CEntity* penVal = *(CEntity**)pValue;
+        CPrintF("%s = %s\n", strProperty, penVal != NULL ? penVal->GetName() : CTString("<none>"));
+    } break;
+
+    case CEntityProperty::EPT_FLOAT3D: {
+        FLOAT3D& vVal = *(FLOAT3D*)pValue;
+        CPrintF("%s = %g,%g,%g\n", strProperty, vVal(1), vVal(2), vVal(3));
+    } break;
+    }
 };
 
 // Parent an entity to another entity

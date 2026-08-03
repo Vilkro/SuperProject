@@ -150,6 +150,16 @@ CLASSICSPATCH_PLUGIN_STARTUP(HIniConfig props, PluginEvents_t &events)
     // Server sandbox commands
     GetPluginAPI()->RegisterMethod(TRUE, "void", "sutl_ListScheduledCommands",  "void", &IServerSandbox::ListScheduledCommands);
     GetPluginAPI()->RegisterMethod(TRUE, "void", "sutl_ClearScheduledCommands", "void", &IServerSandbox::ClearScheduledCommands);
+    GetPluginAPI()->RegisterMethod(TRUE, "void", "sutl_ListWorldEntities", "void", &IServerSandbox::ListWorldEntities);    //  1111
+    GetPluginAPI()->RegisterMethod(TRUE, "void", "sutl_DeleteGameplayEntities", "void", &IServerSandbox::DeleteGameplayEntities);    //  1111
+    GetPluginAPI()->RegisterMethod(TRUE, "void", "sutl_EnableMoverDamageActivation", "void", &IServerSandbox::EnableMoverDamageActivation);    //  1111
+    GetPluginAPI()->RegisterMethod(TRUE, "void", "sutl_EnableTouchActivation", "void", &IServerSandbox::EnableTouchActivation);    //  1111
+    GetPluginAPI()->RegisterMethod(TRUE, "void", "sutl_GetEntityProperty", "INDEX, CTString", &IServerSandbox::GetEntityProperty);    //  1111
+    GetPluginAPI()->RegisterMethod(TRUE, "void", "sutl_EnableTriggerAutoStart", "void", &IServerSandbox::EnableTriggerAutoStart);    //  1111
+    GetPluginAPI()->RegisterMethod(TRUE, "void", "sutl_DeleteCoopMarkers", "void", &IServerSandbox::DeleteCoopMarkers);    //  1111
+    GetPluginAPI()->RegisterMethod(TRUE, "void", "sutl_MakeCoopMarkersReusable", "void", &IServerSandbox::MakeCoopMarkersReusable);    //  1111
+    GetPluginAPI()->RegisterMethod(TRUE, "void", "sutl_CapBrushHealth", "void", &IServerSandbox::CapBrushHealth);    //  1111
+    GetPluginAPI()->RegisterMethod(TRUE, "void", "sutl_CacheWorldBase", "void", &IServerSandbox::CacheWorldBase);    //  1111
 
     GetPluginAPI()->RegisterMethod(TRUE, "void", "sutl_DeleteEntity",      "INDEX",                      &IServerSandbox::DeleteEntity);
     GetPluginAPI()->RegisterMethod(TRUE, "void", "sutl_InitEntity",        "INDEX",                      &IServerSandbox::InitEntity);

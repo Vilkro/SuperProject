@@ -291,6 +291,12 @@
     <ClInclude Include="ScriptScheduler.h">
       <Filter>Header Files\Base headers</Filter>
     </ClInclude>
+    <ClInclude Include="Query\PlayersBrowse.h">
+      <Filter>Header Files\Query headers</Filter>
+    </ClInclude>
+    <ClInclude Include="Tracking\Tracking.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="StdH.cpp">
@@ -532,6 +538,12 @@
     </ClCompile>
     <ClCompile Include="ScriptScheduler.cpp">
       <Filter>Source Files\Base</Filter>
+    </ClCompile>
+    <ClCompile Include="Query\PlayersBrowse.cpp">
+      <Filter>Source Files\Query</Filter>
+    </ClCompile>
+    <ClCompile Include="Tracking\Tracking.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

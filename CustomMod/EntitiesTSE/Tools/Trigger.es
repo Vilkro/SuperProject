@@ -17,6 +17,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 %{
 #include "StdH.h"
 extern INDEX ent_bReportBrokenChains;
+extern INDEX ent_bAnnounceCoopMarkers;   // 1111
+#include <Core/Tracking/Tracking.h>
 %}
 
 class CTrigger: CRationalEntity {
@@ -147,6 +149,11 @@ procedures:
       PrintCenterMessage(this, m_penCaused, 
         TranslateConst(m_strMessage), 
         m_fMessageTime, m_mssMessageSound);
+        
+        // 1111: relay coop marker respawn message to chat, server-side only - pure side effect, no state change
+        if (_pNetwork->IsServer() && ent_bAnnounceCoopMarkers && (m_strName == "Trigger Coop marker" || m_strName == "Coop Marker Trigger")) {
+            NotifyCoopMarkerActivated("^rRespawn point has been updated", "^rТочка возрождения обновлена");
+        }
     }
 
     // if max trig count is used for counting

@@ -1459,6 +1459,16 @@ procedures:
       SetFlags(GetFlags()&~ENF_ANCHORED);
     }
 
+    // NEW: stay alive and start listening for touches  1111
+      wait() {
+        on (ETouch eTouch) : {
+          if (IsDerivedFromClass(eTouch.penOther, "Player")) {
+            CPrintF("^cff0000Player '%s' touching WorldBase '%s'\n",
+              eTouch.penOther->GetName(), GetName());
+          }
+          resume;
+        }
+      }
     return;
   }
 };

@@ -23,6 +23,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "ScriptScheduler.h"   // 1111
 #include "Query/GeoIP.h"            // 1111
 #include "Query/PlayerDB.h"         // 1111
+#include "Query/PlayersBrowse.h"   // 1111
 #include <string.h>                 // 1111: strcmp
 
 CTString ser_strChatName = "Server";    //  1111
@@ -127,6 +128,7 @@ void INetwork::Initialize(void) {
   // extern void InitHttp(void);
   // InitHttp();
   GeoIP_Init();     // Replacement      1111
+  PlayersBrowse_Init();  // 1111
 
   // Make sure there is enough space for local players
   _pNetwork->ga_aplsPlayers.Clear();

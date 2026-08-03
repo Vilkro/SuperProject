@@ -33,6 +33,7 @@ struct SActiveSession {
     char  szName[256];   // generous for colour-coded names
     char  szIP[16];      // dotted-decimal; used to cancel pending GeoIP announce  // 1111
     char  szLang[3];     // "en" or "ru" + null terminator  // 1111
+    BOOL  bAnnounceOptOut;   // RJT: TRUE = opted out of rocket-jump chat announcements
     long  tJoinTime;     // unix timestamp
 };
 
@@ -125,6 +126,25 @@ void PlayerDB_Init(void) {
         }
         if (!bHasLangColumn) {
             ExecSQL("ALTER TABLE players ADD COLUMN lang TEXT DEFAULT 'en';");
+        }
+    }
+
+    // ── rjt_optout column migration ─────────────────────────────────────────────
+    {
+        BOOL bHasOptOutColumn = FALSE;
+        sqlite3_stmt* pPragma = Prepare("PRAGMA table_info(players);");
+        if (pPragma) {
+            while (sqlite3_step(pPragma) == SQLITE_ROW) {
+                const char* szColName = (const char*)sqlite3_column_text(pPragma, 1);
+                if (szColName && strcmp(szColName, "rjt_optout") == 0) {
+                    bHasOptOutColumn = TRUE;
+                    break;
+                }
+            }
+            sqlite3_finalize(pPragma);
+        }
+        if (!bHasOptOutColumn) {
+            ExecSQL("ALTER TABLE players ADD COLUMN rjt_optout INTEGER DEFAULT 0;");
         }
     }
 
@@ -252,6 +272,17 @@ void PlayerDB_OnJoin(INDEX iPlayer, const UBYTE* pGUID,
         }
         sqlite3_finalize(pStmt);
     }
+
+    // ── RJT: load stored announcement opt-out into the in-memory cache ─────────
+    sess.bAnnounceOptOut = FALSE;  // default: announcements ON
+    pStmt = Prepare("SELECT rjt_optout FROM players WHERE guid=?;");
+    if (pStmt) {
+        sqlite3_bind_text(pStmt, 1, szGUID, -1, SQLITE_TRANSIENT);
+        if (sqlite3_step(pStmt) == SQLITE_ROW) {
+            sess.bAnnounceOptOut = (sqlite3_column_int(pStmt, 0) != 0);
+        }
+        sqlite3_finalize(pStmt);
+    }
 }
 
 // ─── disconnect ───────────────────────────────────────────────────────────────
@@ -376,6 +407,37 @@ CTString PlayerDB_CheckBan(const char* szGUID, const char* szIP) {
     }
     sqlite3_finalize(pStmt);
     return strReason;
+}
+
+// ─────────────────────────────────────────────────────────────────── RJT ────
+// Rocket jump announcement opt-out - fast in-memory read/write, persisted to
+// players.rjt_optout. Defaults to FALSE (announcements ON).
+// ─────────────────────────────────────────────────────────────────────────────
+
+BOOL PlayerDB_GetAnnounceOptOut(INDEX iPlayer) {
+    if (iPlayer < 0 || iPlayer >= PLAYERDB_MAX_PLAYERS) return FALSE;
+
+    SActiveSession& sess = _aSessions[iPlayer];
+    if (!sess.bActive) return FALSE;
+
+    return sess.bAnnounceOptOut;
+}
+
+void PlayerDB_SetAnnounceOptOut(INDEX iPlayer, BOOL bOptOut) {
+    if (iPlayer < 0 || iPlayer >= PLAYERDB_MAX_PLAYERS) return;
+
+    SActiveSession& sess = _aSessions[iPlayer];
+    if (!sess.bActive) return;
+
+    sess.bAnnounceOptOut = bOptOut;
+
+    if (_db == NULL) return;
+    sqlite3_stmt* pStmt = Prepare("UPDATE players SET rjt_optout=? WHERE guid=?;");
+    if (pStmt) {
+        sqlite3_bind_int(pStmt, 1, bOptOut ? 1 : 0);
+        sqlite3_bind_text(pStmt, 2, sess.szGUID, -1, SQLITE_TRANSIENT);
+        Run(pStmt);
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────── 1111 ────

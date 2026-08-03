@@ -100,12 +100,14 @@
     <ClInclude Include="Query\DemoManager.h" />
     <ClInclude Include="Query\GeoIP.h" />
     <ClInclude Include="Query\PlayerDB.h" />
+    <ClInclude Include="Query\PlayersBrowse.h" />
     <ClInclude Include="Query\QueryManager.h" />
     <ClInclude Include="Query\MasterServer.h" />
     <ClInclude Include="Query\ServerRequest.h" />
     <ClInclude Include="Query\sqlite3.h" />
     <ClInclude Include="ScriptScheduler.h" />
     <ClInclude Include="StdH.h" />
+    <ClInclude Include="Tracking\Tracking.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="API\EnginePatches.cpp" />
@@ -182,6 +184,7 @@
     <ClCompile Include="Query\LegacyServerQuery.cpp" />
     <ClCompile Include="Query\LegacyFunctions.cpp" />
     <ClCompile Include="Query\PlayerDB.cpp" />
+    <ClCompile Include="Query\PlayersBrowse.cpp" />
     <ClCompile Include="Query\QueryManager.cpp" />
     <ClCompile Include="Query\MasterServer.cpp" />
     <ClCompile Include="Query\ServerRequest.cpp" />
@@ -190,6 +193,12 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release_TSE107|Win32'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release_TFE105|Win32'">NotUsing</PrecompiledHeader>
       <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_TFE105|Win32'">CompileAsC</CompileAs>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug_TSE107|Win32'">NotUsing</PrecompiledHeader>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug_TSE107|Win32'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_TSE105|Win32'">CompileAsC</CompileAs>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release_TSE105|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release_TSE110|Win32'">NotUsing</PrecompiledHeader>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release_TSE110|Win32'">CompileAsC</CompileAs>
     </ClCompile>
     <ClCompile Include="ScriptScheduler.cpp" />
     <ClCompile Include="StdH.cpp">
@@ -200,6 +209,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release_TSE110|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release_TFE105|Win32'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="Tracking\Tracking.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Definitions\GraphicsDefs.inl" />

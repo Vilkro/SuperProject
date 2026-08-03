@@ -204,7 +204,7 @@ CEntity *CExtEntityPacket::GetEntity(void) {
   CEntity *pen = FindExtEntity(ulEntity);
 
   if (pen == NULL) {
-    ClassicsPackets_ServerReport(this, TRANS("Received invalid entity ID!\n"));
+    // temp disable 1111    ClassicsPackets_ServerReport(this, TRANS("Received invalid entity ID!\n"));
     return NULL;
   }
 

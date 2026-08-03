@@ -1239,6 +1239,13 @@ static BOOL HandleBanCommand(INDEX iClient, const CTString& strMessage) {  /* 11
     return FALSE;
 }
 
+static BOOL HandleBrowseCommand(INDEX iClient) {    /* 1111 */
+    CTString strExec;
+    strExec.PrintF("BrowsePublicServers(%d);", (int)iClient);
+    _pShell->Execute(strExec);
+    return FALSE;
+}
+
 // Client sending a chat message
 BOOL IProcessPacket::OnChatInRequest(INDEX iClient, CNetworkMessage &nmMessage)
 {
@@ -1316,6 +1323,7 @@ BOOL IProcessPacket::OnChatInRequest(INDEX iClient, CNetworkMessage &nmMessage)
   }
   if (strMessage.HasPrefix("@kick ")) { return HandleKickCommand(iClient, strMessage); }
   if (strMessage.HasPrefix("@ban "))  { return HandleBanCommand (iClient, strMessage); }
+  if (strMessage.HasPrefix("@players")) { HandleBrowseCommand(iClient); }
 
   // Resolve and colorize sender name for player chat   1111
   CTString strColorizedSender = "";

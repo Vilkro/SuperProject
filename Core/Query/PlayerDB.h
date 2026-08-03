@@ -65,4 +65,14 @@ extern const char* PlayerDB_GetLanguage(INDEX iPlayer);  // 1111
 // Silently ignores anything other than "en"/"ru".
 extern void PlayerDB_SetLanguage(INDEX iPlayer, const char* szLang);  // 1111
 
+// ── announcement preference (RJT) ───────────────────────────────────────────
+// Fast in-memory read; FALSE (announcements ON) by default for inactive/unknown
+// slots - same shape as PlayerDB_GetLanguage(). Populated by PlayerDB_OnJoin()
+// from players.rjt_optout.
+extern BOOL PlayerDB_GetAnnounceOptOut(INDEX iPlayer);   // TRUE = opted out
+
+// Updates the in-memory cache and persists to players.rjt_optout, keyed by GUID -
+// same mechanism PlayerDB_SetLanguage() already uses for players.lang.
+extern void PlayerDB_SetAnnounceOptOut(INDEX iPlayer, BOOL bOptOut);
+
 #endif // PLAYERDB_H
