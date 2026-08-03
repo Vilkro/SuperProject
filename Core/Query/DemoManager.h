@@ -1,4 +1,12 @@
 /* DemoManager.h   // 1111
+ *
+ * Server-side .dem demo recording. Exposes shell functions StartDemoRec(),
+ * StopDemoRec(), IsDemoRecording(), GetDemoName() and GetActivePlayerCount()
+ * (declared/registered in DemoManager.cpp, not here - this header only
+ * exposes the lifecycle hooks). Recording itself is driven entirely from
+ * init.ini script (e.g. auto-rotating demos every N seconds via
+ * ScheduleScript) - see the init.ini snippet at the bottom of DemoManager.cpp.
+ *
  * DROP INTO: Core/Query/DemoManager.h
  */
 
