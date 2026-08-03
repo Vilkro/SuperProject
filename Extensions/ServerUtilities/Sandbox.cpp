@@ -89,6 +89,89 @@ void IServerSandbox::DeleteEntity(SHELL_FUNC_ARGS) {
 
 // ---------------------------------------------------------------------------------------  1111
 // List every entity in the world with its class name - READ ONLY, deletes nothing     1111
+// Print a single property's name and value, based on its declared type.
+static void PrintOneProperty(CEntity* pen, CEntityProperty* pep) {
+    UBYTE* pRaw = ((UBYTE*)pen) + pep->ep_slOffset;
+
+    switch (pep->ep_eptType) {
+    case CEntityProperty::EPT_BOOL: {
+        BOOL b = *(BOOL*)pRaw;
+        CPrintF("    %s = %s\n", pep->ep_strName, b ? "TRUE" : "FALSE");
+        break;
+    }
+    case CEntityProperty::EPT_FLOAT:
+    case CEntityProperty::EPT_RANGE:
+    case CEntityProperty::EPT_ANGLE: {
+        FLOAT f = *(FLOAT*)pRaw;
+        CPrintF("    %s = %g\n", pep->ep_strName, f);
+        break;
+    }
+    case CEntityProperty::EPT_INDEX:
+    case CEntityProperty::EPT_ANIMATION:
+    case CEntityProperty::EPT_ILLUMINATIONTYPE: {
+        INDEX i = *(INDEX*)pRaw;
+        CPrintF("    %s = %d\n", pep->ep_strName, i);
+        break;
+    }
+    case CEntityProperty::EPT_ENUM: {
+        INDEX i = *(INDEX*)pRaw;
+        const char* strName = (pep->ep_pepetEnumType != NULL)
+            ? pep->ep_pepetEnumType->NameForValue(i) : NULL;
+        if (strName != NULL) {
+            CPrintF("    %s = %d (%s)\n", pep->ep_strName, i, strName);
+        }
+        else {
+            CPrintF("    %s = %d\n", pep->ep_strName, i);
+        }
+        break;
+    }
+    case CEntityProperty::EPT_FLAGS: {
+        ULONG ul = *(ULONG*)pRaw;
+        CPrintF("    %s = 0x%08lX\n", pep->ep_strName, ul);
+        break;
+    }
+    case CEntityProperty::EPT_COLOR: {
+        COLOR c = *(COLOR*)pRaw;
+        CPrintF("    %s = 0x%08lX\n", pep->ep_strName, (ULONG)c);
+        break;
+    }
+    case CEntityProperty::EPT_STRING:
+    case CEntityProperty::EPT_STRINGTRANS:
+    case CEntityProperty::EPT_FILENAME:
+    case CEntityProperty::EPT_FILENAMENODEP: {
+        CTString& str = *(CTString*)pRaw;
+        CPrintF("    %s = \"%s\"\n", pep->ep_strName, (const char*)str);
+        break;
+    }
+    case CEntityProperty::EPT_ENTITYPTR: {
+        CEntityPointer& penRef = *(CEntityPointer*)pRaw;
+        if (penRef.ep_pen != NULL) {
+            CPrintF("    %s = <entity @ %p>\n", pep->ep_strName, (void*)penRef.ep_pen);
+        }
+        else {
+            CPrintF("    %s = NULL\n", pep->ep_strName);
+        }
+        break;
+    }
+    case CEntityProperty::EPT_FLOAT3D: {
+        FLOAT3D& v = *(FLOAT3D*)pRaw;
+        CPrintF("    %s = (%g, %g, %g)\n", pep->ep_strName, v(1), v(2), v(3));
+        break;
+    }
+    case CEntityProperty::EPT_ANGLE3D: {
+        ANGLE3D& a = *(ANGLE3D*)pRaw;
+        CPrintF("    %s = H:%g P:%g B:%g\n", pep->ep_strName, a(1), a(2), a(3));
+        break;
+    }
+    default: {
+        CPrintF("    %s = <type %d, not printed>\n", pep->ep_strName, (int)pep->ep_eptType);
+        break;
+    }
+    }
+}
+
+// List every entity in the world with id, class, name, position, and all
+// properties (own + inherited) with their values - READ ONLY, deletes nothing
 void IServerSandbox::ListWorldEntities(void) {
     CWorld* pwo = IWorld::GetWorld();
 
@@ -102,8 +185,22 @@ void IServerSandbox::ListWorldEntities(void) {
     FOREACHINDYNAMICCONTAINER(pwo->wo_cenEntities, CEntity, iten) {
         CEntity* pen = &*iten;
         const CTString& strClass = pen->GetClass()->ec_pdecDLLClass->dec_strName;
+        const FLOAT3D& vPos = pen->GetPlacement().pl_PositionVector;
 
-        CPrintF("[%s] %s\n", strClass, pen->GetName());
+        CPrintF("[ID %lu] [%s] %s  (X: %g, Y: %g, Z: %g)\n",
+            pen->en_ulID, strClass, pen->GetName(),
+            vPos(1), vPos(2), vPos(3));
+
+        // Walk the full class hierarchy so inherited properties are included too,
+        // not just the ones declared directly on this entity's own .es class.
+        CDLLEntityClass* pdec = pen->GetClass()->ec_pdecDLLClass;
+        while (pdec != NULL) {
+            for (INDEX i = 0; i < pdec->dec_ctProperties; i++) {
+                PrintOneProperty(pen, &pdec->dec_aepProperties[i]);
+            }
+            pdec = pdec->dec_pdecBase;
+        }
+
         ctTotal++;
     }
 

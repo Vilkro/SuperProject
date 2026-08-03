@@ -24,7 +24,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "Query/PlayerDB.h" // 1111
 #include "Query/GeoIP.h"    // 1111
 
-// Join event context - set before executing cmd_cmdOnJoin  1111
+// Join event hook. If cmd_cmdOnJoin is non-empty, it's executed as a shell
+// script every time a player joins. Before it runs, cmd_strJoinName/
+// cmd_strJoinIP/cmd_iJoinClient/cmd_iJoinPlayer are filled in with that
+// player's info so the script can read them; cmd_iChatClient is the
+// equivalent "current client" context used by the chat hook below.  1111
 static CTString cmd_cmdOnJoin = "";
 static CTString cmd_strJoinName = "";
 static CTString cmd_strJoinIP = "";
@@ -32,13 +36,21 @@ static INDEX    cmd_iJoinClient = -1;
 static INDEX    cmd_iJoinPlayer = -1;
 static INDEX    cmd_iChatClient = -1;
 
-// Chat event script and context variables    1111
+// Chat event hook. If cmd_cmdOnChat is non-empty, it's executed as a shell
+// script every time a chat message is sent; cmd_strChatMessage holds that
+// message for the duration of the call (cleared again right after).
+// cmd_strSilentChatCommands is a ';'-separated list of exact messages
+// (e.g. custom chat commands) that should never be broadcast to other
+// players, only trigger cmd_cmdOnChat.    1111
 static CTString cmd_cmdOnChat = "";
 static CTString cmd_strChatMessage = "";
 static CTString cmd_strSilentChatCommands = "";  // ';'-separated exact matches that never get broadcast
 static CTString cmd_strPMCmd = "@pm";   //  1111 configurable PM command trigger
 
-// Extra strings    1111
+// General-purpose scratch strings for scripts (init.ini / round scripts).
+// Not read or written by any C++ code - they exist purely so scripts can
+// stash a value (a snippet to hand to ScheduleScript, an entity ID, etc.)
+// in a persistent-for-the-session shell variable instead of a local one.  1111
 static CTString cmd_strFirstExtra = "";
 static CTString cmd_strSecondExtra = "";
 static CTString cmd_strThirdExtra = "";

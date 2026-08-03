@@ -22,8 +22,20 @@ CTString ded_strLevel = "";
 INDEX ded_bRestartWhenEmpty = TRUE;
 FLOAT ded_tmTimeout = -1;
 
+// If TRUE, the server is also allowed to auto-restart while paused waiting
+// for the very first player to ever join (not just after the room empties
+// out post-game). Off by default to preserve original behavior, where a
+// freshly-started, still-empty server just waits forever.  1111
 INDEX ded_bRestartWhenPaused = 0;   // 1111
+
+// If TRUE, an auto-restart resets the round counter back to round 1 instead
+// of resuming from whatever round/map was active before the restart.  1111
 INDEX ded_bFirstRoundOnRestart = 0;     //  1111
+
+// Seconds to wait after the server has been empty (or, if
+// ded_bRestartWhenPaused is set, since startup with zero players) before
+// ded_bRestartWhenEmpty is allowed to trigger an automatic restart. 0 = no
+// grace period, restart is allowed as soon as the room is empty.  1111
 FLOAT ded_tmRestartWhenEmptyDelay = 0;   // 1111
 
 // #define MAX_ROUNDS 64

@@ -26,9 +26,20 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "Query/PlayersBrowse.h"   // 1111
 #include <string.h>                 // 1111: strcmp
 
+// Display name used as the sender for server-originated chat messages
+// (Say(), SayToAllExcept(), etc.) - purely cosmetic, no other effect.  1111
 CTString ser_strChatName = "Server";    //  1111
+
+// Fallback "^cRRGGBB" color code ColorizeNick() prepends to a player's name
+// when the name itself has no color codes of its own (keeps concatenation
+// with other colored text safe, since the game reuses the last color seen).  1111
 CTString ser_strDefaultNickColor = "^cffffff";  //  1111
 
+// General-purpose script-scratch string, same category as cmd_strFirstExtra
+// etc. in MessageProcessing.cpp - not read by any C++ code. Exists so a
+// script can build a self-rescheduling loop, e.g. an idle-kick watcher that
+// calls ScheduleScript(delay, cmd_strIdleWatcherTick) on itself each tick
+// (see init.ini for the actual idle-watcher implementation).  1111
 CTString cmd_strIdleWatcherTick = "";  // 1111
 
 void SayToClient(SHELL_FUNC_ARGS);    //  1111
@@ -957,6 +968,10 @@ void ListClients(SHELL_FUNC_ARGS) {
     }
 }
  
+// VoteForKick(iClient, iTarget) — iClient starts a kick vote against iTarget
+// (thin wrapper around StartPlayerVote with bBan = FALSE). See
+// StartPlayerVote/CastPlayerVote below for tallying, timeout, and broadcast
+// behavior shared with VoteForBan.  1111
 void VoteForKick(SHELL_FUNC_ARGS) {  // 1111
     BEGIN_SHELL_FUNC;
     INDEX iClient = NEXT_ARG(INDEX);
@@ -964,6 +979,9 @@ void VoteForKick(SHELL_FUNC_ARGS) {  // 1111
     StartPlayerVote(iClient, iTarget, FALSE);
 }
  
+// VoteForBan(iClient, iTarget) — same as VoteForKick, but a successful vote
+// bans iTarget for PLAYERVOTE_BAN_MINUTES (via BanClientTemp below) instead
+// of just disconnecting them.  1111
 void VoteForBan(SHELL_FUNC_ARGS) {  // 1111
     BEGIN_SHELL_FUNC;
     INDEX iClient = NEXT_ARG(INDEX);
